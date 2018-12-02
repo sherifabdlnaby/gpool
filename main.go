@@ -18,9 +18,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"pipeline/Payload"
 	"pipeline/pool"
-	"pipeline/work"
-	"time"
 )
 
 const WORKER_COUNT = 2
@@ -31,16 +30,25 @@ func main() {
 
 	workerPool := pool.WorkerPool{}
 
-	workerPool.StartWorkerPool(WORKER_COUNT)
+	workerPool.Init(WORKER_COUNT)
 
-	for i, job := range work.CreateJobs(JOB_COUNT) {
-		select {
-		case workerPool.Work <- pool.Work{Job: job, ID: i}:
-		case <-time.After(1 * time.Second):
-			log.Println(fmt.Sprintf("Job [%d] Timedout", i))
-		}
+	workerPool.Start()
 
-	}
+	result1, _ := workerPool.Enqueue(Payload.Payload{ID: 123, Json: "SHERIF"})
+	result2, _ := workerPool.Enqueue(Payload.Payload{ID: 124, Json: "SHERIF"})
+	result3, _ := workerPool.Enqueue(Payload.Payload{ID: 125, Json: "SHERIF"})
+	result4, _ := workerPool.Enqueue(Payload.Payload{ID: 126, Json: "SHERIF"})
+	result5, _ := workerPool.Enqueue(Payload.Payload{ID: 127, Json: "SHERIF"})
+	result6, _ := workerPool.Enqueue(Payload.Payload{ID: 128, Json: "SHERIF"})
+	result7, _ := workerPool.Enqueue(Payload.Payload{ID: 129, Json: "SHERIF"})
+
+	fmt.Println(<-result7)
+	fmt.Println(<-result2)
+	fmt.Println(<-result4)
+	fmt.Println(<-result6)
+	fmt.Println(<-result5)
+	fmt.Println(<-result3)
+	fmt.Println(<-result1)
 
 	workerPool.Stop()
 }

@@ -7,8 +7,9 @@ import (
 )
 
 type Work struct {
-	ID  int
-	Job string
+	ID     int
+	Job    string
+	Result chan string
 }
 
 type Worker struct {
@@ -26,7 +27,8 @@ func (w *Worker) Start() {
 			select {
 			case job := <-w.Receive:
 				// do work
-				work.DoWork(job.Job, job.ID, w.ID)
+				job.Result <- work.DoWork(job.Job, job.ID, w.ID)
+				close(job.Result)
 			case <-w.End:
 				log.Println(fmt.Sprintf("Worker [%d] has stopped.", w.ID))
 				return

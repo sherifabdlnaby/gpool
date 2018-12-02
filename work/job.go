@@ -27,9 +27,10 @@ func CreateJobs(amount int) []string {
 }
 
 // mimics any type of job that can be run concurrently
-func DoWork(word string, jobId int, workerId int) {
+func DoWork(word string, jobId int, workerId int) string {
 	h := fnv.New32a()
 	h.Write([]byte(word))
 	fmt.Printf("worker [%d] - Job[%d]: created hash [%d] from word [%s]\n", workerId, jobId, h.Sum32(), word)
 	time.Sleep(time.Millisecond * 2000)
+	return word
 }
