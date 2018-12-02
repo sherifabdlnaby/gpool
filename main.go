@@ -19,28 +19,42 @@ import (
 	"fmt"
 	"log"
 	"pipeline/Payload"
-	"pipeline/pool"
+	"pipeline/StringReverser"
+	"pipeline/workerpool"
+	"time"
 )
 
-const WORKER_COUNT = 2
-const JOB_COUNT = 500
+const WORKER_COUNT = 1
 
 func main() {
 	log.Println("starting application...")
 
-	workerPool := pool.WorkerPool{}
-
-	workerPool.Init(WORKER_COUNT)
+	workerPool := workerpool.NewWorkerPool(WORKER_COUNT)
 
 	workerPool.Start()
 
-	result1, _ := workerPool.Enqueue(Payload.Payload{ID: 123, Json: "SHERIF"})
-	result2, _ := workerPool.Enqueue(Payload.Payload{ID: 124, Json: "SHERIF"})
-	result3, _ := workerPool.Enqueue(Payload.Payload{ID: 125, Json: "SHERIF"})
-	result4, _ := workerPool.Enqueue(Payload.Payload{ID: 126, Json: "SHERIF"})
-	result5, _ := workerPool.Enqueue(Payload.Payload{ID: 127, Json: "SHERIF"})
-	result6, _ := workerPool.Enqueue(Payload.Payload{ID: 128, Json: "SHERIF"})
-	result7, _ := workerPool.Enqueue(Payload.Payload{ID: 129, Json: "SHERIF"})
+	sr := StringReverser.StringReverser{}
+
+	/*	result0, _ := workerPool.EnqueueWithTimeout(sr, Payload.Payload{ID: 123, Json: "SHERIF"}, time.Second * 1000)
+		result1, _ := workerPool.EnqueueWithTimeout(sr, <-result0, time.Second * 1000)
+		result2, _ := workerPool.EnqueueWithTimeout(sr, <-result1, time.Second * 1000)
+		result3, _ := workerPool.EnqueueWithTimeout(sr, <-result2, time.Second * 1000)
+		result4, _ := workerPool.EnqueueWithTimeout(sr, <-result3, time.Second * 1000)
+		result5, _ := workerPool.EnqueueWithTimeout(sr, <-result4, time.Second * 1000)
+		result6, _ := workerPool.EnqueueWithTimeout(sr, <-result5, time.Second * 1000)
+		result7, _ := workerPool.EnqueueWithTimeout(sr, <-result6, time.Second * 1000)
+		result8, _ := workerPool.EnqueueWithTimeout(sr, <-result7, time.Second * 1000)
+		result9, _ := workerPool.EnqueueWithTimeout(sr, <-result8, time.Second * 1000)
+		result10, _ := workerPool.EnqueueWithTimeout(sr, <-result9, time.Second * 1000)
+		workerPool.EnqueueWithTimeout(sr, <-result10, time.Second * 1000)*/
+
+	result1, _ := workerPool.EnqueueWithTimeout(sr, Payload.Payload{ID: 1, Json: "SHERIF"}, time.Millisecond*1000)
+	result2, _ := workerPool.EnqueueWithTimeout(sr, Payload.Payload{ID: 2, Json: "SHERIF"}, time.Millisecond*1000)
+	result3, _ := workerPool.EnqueueWithTimeout(sr, Payload.Payload{ID: 3, Json: "SHERIF"}, time.Millisecond*1000)
+	result4, _ := workerPool.EnqueueWithTimeout(sr, Payload.Payload{ID: 4, Json: "SHERIF"}, time.Millisecond*1000)
+	result5, _ := workerPool.EnqueueWithTimeout(sr, Payload.Payload{ID: 5, Json: "SHERIF"}, time.Millisecond*1000)
+	result6, _ := workerPool.EnqueueWithTimeout(sr, Payload.Payload{ID: 6, Json: "SHERIF"}, time.Millisecond*1000)
+	result7, _ := workerPool.EnqueueWithTimeout(sr, Payload.Payload{ID: 7, Json: "SHERIF"}, time.Millisecond*1000)
 
 	fmt.Println(<-result7)
 	fmt.Println(<-result2)

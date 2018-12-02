@@ -1,22 +1,26 @@
-package pool
+package workerpool
 
 import (
 	"fmt"
 	"log"
-	"pipeline/work"
+	"pipeline/Payload"
 	"sync"
 )
 
-type Work struct {
-	ID     int
-	Job    string
-	Result chan string
+type Work interface {
+	Run(Payload.Payload) Payload.Payload
+}
+
+type Task struct {
+	Work       Work
+	Payload    Payload.Payload
+	ResultChan chan Payload.Payload
 }
 
 type Worker struct {
 	ID      int
-	Worker  chan chan Work
-	Receive chan Work
+	Worker  chan chan Task
+	Receive chan Task
 	End     chan struct{}
 	Wg      *sync.WaitGroup
 }
@@ -28,10 +32,10 @@ func (w *Worker) Start() {
 		for {
 			w.Worker <- w.Receive
 			select {
-			case job := <-w.Receive:
+			case task := <-w.Receive:
 				// do work
-				job.Result <- work.DoWork(job.Job, job.ID, w.ID)
-				close(job.Result)
+				task.ResultChan <- task.Work.Run(task.Payload)
+				close(task.ResultChan)
 			case <-w.End:
 				log.Println(fmt.Sprintf("Worker [%d] has stopped.", w.ID))
 				return

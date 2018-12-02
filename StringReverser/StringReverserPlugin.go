@@ -1,10 +1,13 @@
 package StringReverser
 
 import (
+	"crypto/sha1"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"pipeline/Payload"
 	"pipeline/Plugin"
+	"time"
 )
 
 var ProcessIdentifier = Plugin.ProcessIdentifier{
@@ -28,9 +31,16 @@ func (s StringReverser) Start() {
 }
 
 func (s StringReverser) Run(p Payload.Payload) Payload.Payload {
-	log.Println(fmt.Sprintf("RUNNING A PROCESS AT Plugin: %s v%s", s.GetIdentifier().Name, s.GetIdentifier().Version))
+	log.Println(fmt.Sprintf("RUNNING A PROCESS AT Plugin: [%s] [v%s] with PAYLOAD: %s", s.GetIdentifier().Name, s.GetIdentifier().Version, p))
+	time.Sleep(1500 * time.Millisecond)
+
+	//DO SOME STUFF
+	hasher := sha1.New()
+	hasher.Write([]byte(p.Json))
+	sha := base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+	//
 	return Payload.Payload{
-		Json:  p.Json,
+		Json:  sha,
 		Img:   p.Img,
 		Count: p.Count + 1,
 	}
@@ -38,5 +48,4 @@ func (s StringReverser) Run(p Payload.Payload) Payload.Payload {
 
 func (s StringReverser) Close() {
 	log.Println(fmt.Sprintf("CLOSING Plugin: %s v%s", s.GetIdentifier().Name, s.GetIdentifier().Version))
-
 }
