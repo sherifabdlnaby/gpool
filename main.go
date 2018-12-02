@@ -16,31 +16,27 @@ func main() {
 package main
 
 import (
-	"flag"
-	"fmt"
-	"net/http"
+	"log"
+	"pipeline/pool"
+	"pipeline/work"
+	"time"
 )
 
-var (
-	NWorkers = flag.Int("n", 4, "The number of workers to start")
-	HTTPAddr = flag.String("http", "127.0.0.1:8000", "Address to listen for HTTP requests on")
-)
+const WORKER_COUNT = 2
+const JOB_COUNT = 5
 
 func main() {
-	// Parse the command-line flags.
-	flag.Parse()
+	log.Println("starting application...")
 
-	// Start the dispatcher.
-	fmt.Println("Starting the dispatcher")
-	StartDispatcher(*NWorkers)
+	workerPool := pool.WorkerPool{}
 
-	// Register our collector as an HTTP handler function.
-	fmt.Println("Registering the collector")
-	http.HandleFunc("/work", Collector)
+	workerPool.StartWorkerPool(WORKER_COUNT)
 
-	// Start the HTTP server!
-	fmt.Println("HTTP server listening on", *HTTPAddr)
-	if err := http.ListenAndServe(*HTTPAddr, nil); err != nil {
-		fmt.Println(err.Error())
+	for i, job := range work.CreateJobs(JOB_COUNT) {
+		workerPool.Work <- pool.Work{Job: job, ID: i}
 	}
+
+	workerPool.StopWorkers()
+
+	time.Sleep(1000 * time.Second)
 }
