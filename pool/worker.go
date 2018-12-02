@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"pipeline/work"
+	"sync"
 )
 
 type Work struct {
@@ -17,11 +18,13 @@ type Worker struct {
 	Worker  chan chan Work
 	Receive chan Work
 	End     chan struct{}
+	Wg      *sync.WaitGroup
 }
 
 // start worker
 func (w *Worker) Start() {
 	go func() {
+		defer w.Wg.Done()
 		for {
 			w.Worker <- w.Receive
 			select {
