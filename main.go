@@ -1,7 +1,7 @@
 /* package main
 
 import (
-	"pipeline/Payload"
+	"pipeline/payload"
 	"pipeline/StringReverser"
 )
 
@@ -9,7 +9,7 @@ func main() {
     var processPlugin StringReverser.StringReverser
 	processPlugin.Init("{'json' : 'config and stuff '}")
 	processPlugin.Start()
-	processPlugin.Run(Payload.Payload{})
+	processPlugin.Run(payload.payload{})
 	processPlugin.Close()
 }*/
 
@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-const WORKER_COUNT = 1
+const WORKER_COUNT = 10
 
 func main() {
 	log.Println("starting application...")
@@ -35,7 +35,7 @@ func main() {
 
 	sr := StringReverser.StringReverser{}
 
-	/*	result0, _ := workerPool.EnqueueWithTimeout(sr, Payload.Payload{ID: 123, Json: "SHERIF"}, time.Second * 1000)
+	/*	result0, _ := workerPool.EnqueueWithTimeout(sr, payload.payload{ID: 123, Json: "SHERIF"}, time.Second * 1000)
 		result1, _ := workerPool.EnqueueWithTimeout(sr, <-result0, time.Second * 1000)
 		result2, _ := workerPool.EnqueueWithTimeout(sr, <-result1, time.Second * 1000)
 		result3, _ := workerPool.EnqueueWithTimeout(sr, <-result2, time.Second * 1000)

@@ -3,30 +3,19 @@ package workerpool
 import (
 	"fmt"
 	"log"
-	"pipeline/Payload"
 	"sync"
 )
 
-type Work interface {
-	Run(Payload.Payload) Payload.Payload
-}
-
-type Task struct {
-	Work       Work
-	Payload    Payload.Payload
-	ResultChan chan Payload.Payload
-}
-
-type Worker struct {
+type worker struct {
 	ID      int
-	Worker  chan chan Task
-	Receive chan Task
+	Worker  chan chan task
+	Receive chan task
 	End     chan struct{}
 	Wg      *sync.WaitGroup
 }
 
 // start worker
-func (w *Worker) Start() {
+func (w *worker) Start() {
 	go func() {
 		defer w.Wg.Done()
 		for {
@@ -34,10 +23,10 @@ func (w *Worker) Start() {
 			select {
 			case task := <-w.Receive:
 				// do work
-				task.ResultChan <- task.Work.Run(task.Payload)
-				close(task.ResultChan)
+				task.resultChan <- task.work.Run(task.payload)
+				close(task.resultChan)
 			case <-w.End:
-				log.Println(fmt.Sprintf("Worker [%d] has stopped.", w.ID))
+				log.Println(fmt.Sprintf("worker [%d] has stopped.", w.ID))
 				return
 			}
 		}
@@ -45,7 +34,7 @@ func (w *Worker) Start() {
 }
 
 // end worker
-func (w *Worker) Stop() {
+func (w *worker) Stop() {
 	log.Printf("worker [%d] is stopping", w.ID)
 	w.End <- struct{}{}
 }
