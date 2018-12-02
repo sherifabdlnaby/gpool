@@ -24,12 +24,12 @@ func (w *Worker) Start() {
 		for {
 			w.Worker <- w.Receive
 			select {
-			case <-w.End:
-				log.Println(fmt.Sprintf("Worker [%d] has stopped.", w.ID))
-				return
 			case job := <-w.Receive:
 				// do work
 				work.DoWork(job.Job, job.ID, w.ID)
+			case <-w.End:
+				log.Println(fmt.Sprintf("Worker [%d] has stopped.", w.ID))
+				return
 			}
 		}
 	}()

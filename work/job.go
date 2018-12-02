@@ -31,5 +31,5 @@ func DoWork(word string, jobId int, workerId int) {
 	h := fnv.New32a()
 	h.Write([]byte(word))
 	fmt.Printf("worker [%d] - Job[%d]: created hash [%d] from word [%s]\n", workerId, jobId, h.Sum32(), word)
-	time.Sleep(time.Millisecond * 300)
+	time.Sleep(time.Millisecond * 2000)
 }

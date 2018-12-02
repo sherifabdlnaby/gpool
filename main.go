@@ -16,6 +16,7 @@ func main() {
 package main
 
 import (
+	"fmt"
 	"log"
 	"pipeline/pool"
 	"pipeline/work"
@@ -23,7 +24,7 @@ import (
 )
 
 const WORKER_COUNT = 2
-const JOB_COUNT = 5
+const JOB_COUNT = 500
 
 func main() {
 	log.Println("starting application...")
@@ -33,10 +34,13 @@ func main() {
 	workerPool.StartWorkerPool(WORKER_COUNT)
 
 	for i, job := range work.CreateJobs(JOB_COUNT) {
-		workerPool.Work <- pool.Work{Job: job, ID: i}
+		select {
+		case workerPool.Work <- pool.Work{Job: job, ID: i}:
+		case <-time.After(1 * time.Second):
+			log.Println(fmt.Sprintf("Job [%d] Timedout", i))
+		}
+
 	}
 
-	workerPool.StopWorkers()
-
-	time.Sleep(1000 * time.Second)
+	workerPool.Stop()
 }
