@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-const WORKER_COUNT = 10
+const WORKER_COUNT = 3
 
 func main() {
 	log.Println("starting application...")
@@ -32,6 +32,7 @@ func main() {
 	workerPool := workerpool.NewWorkerPool(WORKER_COUNT)
 
 	workerPool.Start()
+	defer workerPool.Stop()
 
 	sr := StringReverser.StringReverser{}
 
@@ -64,5 +65,4 @@ func main() {
 	fmt.Println(<-result3)
 	fmt.Println(<-result1)
 
-	workerPool.Stop()
 }

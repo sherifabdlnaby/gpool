@@ -1,6 +1,7 @@
 package workerpool
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"pipeline/Payload"
@@ -21,21 +22,24 @@ type task struct {
 type WorkerPool struct {
 	WorkerCount int
 	work        chan task
-	end         chan struct{}
 	workerQueue chan chan task
 	workers     []worker
 	wg          sync.WaitGroup
+	ctx         context.Context
+	cancel      context.CancelFunc
 }
 
 func NewWorkerPool(workerCount int) *WorkerPool {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
 	newWorkerPool := WorkerPool{
 		WorkerCount: workerCount,
-		work:        make(chan task),     // channel to receive work
-		end:         make(chan struct{}), // channel to spin down workers
+		work:        make(chan task), // channel to receive work
+		ctx:         ctx,
+		cancel:      cancel,
 		workerQueue: make(chan chan task, workerCount),
 		workers:     make([]worker, workerCount),
 	}
-	newWorkerPool.wg.Add(workerCount)
 	return &newWorkerPool
 }
 
@@ -49,12 +53,10 @@ func (w *WorkerPool) Start() {
 			ID:      i,
 			Receive: make(chan task),
 			Worker:  w.workerQueue,
-			End:     w.end,
-			Wg:      &w.wg,
 		}
 
 		// Start worker and start consuming
-		worker.Start()
+		worker.Start(w.ctx, &w.wg)
 
 		// Store workers
 		w.workers = append(w.workers, worker)
@@ -63,17 +65,13 @@ func (w *WorkerPool) Start() {
 	// Start Pool
 	go func() {
 		for {
-			select {
-			case work := <-w.work:
-				workerChan := <-w.workerQueue // wait for available worker receive channel
-				workerChan <- work            // dispatch work to worker
-			}
+			<-w.workerQueue <- <-w.work
 		}
 	}()
 }
 
 func (w *WorkerPool) Stop() {
-	close(w.end)
+	w.cancel()
 	w.wg.Wait()
 }
 

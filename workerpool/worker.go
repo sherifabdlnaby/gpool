@@ -1,6 +1,7 @@
 package workerpool
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -10,14 +11,13 @@ type worker struct {
 	ID      int
 	Worker  chan chan task
 	Receive chan task
-	End     chan struct{}
-	Wg      *sync.WaitGroup
 }
 
 // start worker
-func (w *worker) Start() {
+func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) {
+	wg.Add(1)
 	go func() {
-		defer w.Wg.Done()
+		defer wg.Done()
 		for {
 			w.Worker <- w.Receive
 			select {
@@ -25,16 +25,10 @@ func (w *worker) Start() {
 				// do work
 				task.resultChan <- task.work.Run(task.payload)
 				close(task.resultChan)
-			case <-w.End:
+			case <-ctx.Done():
 				log.Println(fmt.Sprintf("worker [%d] has stopped.", w.ID))
 				return
 			}
 		}
 	}()
-}
-
-// end worker
-func (w *worker) Stop() {
-	log.Printf("worker [%d] is stopping", w.ID)
-	w.End <- struct{}{}
 }
