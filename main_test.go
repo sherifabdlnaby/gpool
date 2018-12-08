@@ -41,8 +41,11 @@ var workAmountValues = []int{10, 100, 1000, 10000, 100000}
 				b.ResetTimer()
 
 				for i2 := 1; i2 < b.N; i2++ {
-					x, _ := workerPool.Enqueue(&sr, 13376800)
-					<-x
+					resultChan := make(chan int, 1)
+					_ = workerPool.Enqueue(func() {
+						resultChan <- sr.Run(123)
+					})
+					<-resultChan
 				}
 
 				b.StopTimer()
@@ -82,8 +85,11 @@ func BenchmarkBulkWait(b *testing.B) {
 						wg.Add(work)
 						for i3 := 0; i3 < work; i3++ {
 							go func() {
-								x, _ := workerPool.Enqueue(&sr, 13376800)
-								<-x
+								resultChan := make(chan int, 1)
+								_ = workerPool.Enqueue(func() {
+									resultChan <- sr.Run(123)
+								})
+								<-resultChan
 								wg.Done()
 							}()
 						}

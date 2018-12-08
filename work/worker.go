@@ -7,24 +7,14 @@ import (
 
 type Worker struct {
 	ID      int
-	Worker  chan chan Task
-	Receive chan Task
-}
-
-type Task struct {
-	Work       Work
-	Payload    int
-	ResultChan chan int
-}
-
-type Work interface {
-	Run(int) int
+	Worker  chan chan func()
+	Receive chan func()
 }
 
 type ConcurrencyBounder interface {
 	Start()
 	Stop()
-	Enqueue(work Work, payload int) (<-chan int, error)
+	Enqueue(f func()) error
 }
 
 // start Worker
@@ -37,8 +27,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup) {
 			select {
 			case task := <-w.Receive:
 				// do Work
-				task.ResultChan <- task.Work.Run(task.Payload)
-				close(task.ResultChan)
+				task()
 			case <-ctx.Done():
 				//log.Println(fmt.Sprintf("Worker [%d] has stopped.", w.ID))
 				return

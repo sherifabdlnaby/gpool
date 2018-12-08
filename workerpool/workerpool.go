@@ -5,12 +5,11 @@ import (
 	"errors"
 	"pipeline/work"
 	"sync"
-	"time"
 )
 
 type WorkerPool struct {
 	WorkerCount int
-	workerQueue chan chan worker.Task
+	workerQueue chan chan func()
 	workers     []worker.Worker
 	wg          sync.WaitGroup
 	ctx         context.Context
@@ -31,7 +30,7 @@ func NewWorkerPool(workerCount int) *WorkerPool {
 		WorkerCount: workerCount,
 		ctx:         ctx,
 		cancel:      cancel,
-		workerQueue: make(chan chan worker.Task, workerCount),
+		workerQueue: make(chan chan func(), workerCount),
 		workers:     make([]worker.Worker, workerCount),
 	}
 	return &newWorkerPool
@@ -45,7 +44,7 @@ func (w *WorkerPool) Start() {
 
 		workerx := worker.Worker{
 			ID:      i,
-			Receive: make(chan worker.Task),
+			Receive: make(chan func()),
 			Worker:  w.workerQueue,
 		}
 
@@ -67,35 +66,17 @@ func (w *WorkerPool) Stop() {
 	}
 }
 
-func (w *WorkerPool) Enqueue(work worker.Work, payload int) (<-chan int, error) {
-	resultChan := make(chan int, 1)
+func (w *WorkerPool) Enqueue(f func()) error {
 
 	// Check If Worker Pool is opened
 	if workerr, ok := <-w.workerQueue; ok {
 		select {
-		case workerr <- worker.Task{Work: work, Payload: payload, ResultChan: resultChan}:
-			return resultChan, nil
+		case workerr <- f:
+			return nil
 		case <-w.ctx.Done():
-			return nil, ErrWorkerPoolClosed2
+			return ErrWorkerPoolClosed2
 		}
 	}
 
-	return nil, ErrWorkerPoolClosed1
-}
-
-func (w *WorkerPool) EnqueueWithTimeout(work worker.Work, payload int, timeout time.Duration) (<-chan int, error) {
-	resultChan := make(chan int, 1)
-
-	// Check If Worker Pool is opened
-	if workerx, ok := <-w.workerQueue; ok {
-		select {
-		case workerx <- worker.Task{Work: work, Payload: payload, ResultChan: resultChan}:
-			return resultChan, nil
-		case <-w.ctx.Done():
-			return nil, ErrWorkerPoolClosed2
-		case <-time.After(timeout):
-			return nil, ErrWorkTimeout
-		}
-	}
-	return nil, ErrWorkerPoolClosed1
+	return ErrWorkerPoolClosed1
 }

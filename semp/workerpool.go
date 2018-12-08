@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"golang.org/x/sync/semaphore"
-	"pipeline/work"
 )
 
 type WorkerPoolSemaphore struct {
@@ -24,17 +23,16 @@ func (w *WorkerPoolSemaphore) Stop() {
 	return
 }
 
-func (w *WorkerPoolSemaphore) Enqueue(work worker.Work, payload int) (<-chan int, error) {
+func (w *WorkerPoolSemaphore) Enqueue(f func()) error {
 	err := w.semaphore.Acquire(w.ctx, 1)
 	if err != nil {
-		return nil, ErrWorkerPoolClosed2
+		return ErrWorkerPoolClosed2
 	}
-	resultChan := make(chan int, 1)
 	go func() {
-		resultChan <- work.Run(payload)
+		f()
 		w.semaphore.Release(1)
 	}()
-	return resultChan, nil
+	return nil
 
 }
 

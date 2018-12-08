@@ -32,9 +32,12 @@ func main() {
 
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
+		x := make(chan int, 1)
 		go func(i int) {
 			defer wg.Done()
-			x, _ := workerPool.Enqueue(&sr, 3)
+			_ = workerPool.Enqueue(func() {
+				x <- sr.Run(123)
+			})
 			fmt.Println(<-x)
 		}(i)
 	}
