@@ -8,7 +8,7 @@ import (
 )
 
 type WorkerPoolSemaphore struct {
-	WorkerCount int
+	WorkerCount int64
 	semaphore   semaphore.Weighted
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -20,6 +20,7 @@ func (w *WorkerPoolSemaphore) Start() {
 
 func (w *WorkerPoolSemaphore) Stop() {
 	w.ctx.Done()
+	_ = w.semaphore.Acquire(context.TODO(), w.WorkerCount)
 	return
 }
 
@@ -44,7 +45,7 @@ var (
 	ErrWorkTimeout       = errors.New("timeout")
 )
 
-func NewSempWorker(workerCount int) *WorkerPoolSemaphore {
+func NewSempWorker(workerCount int64) *WorkerPoolSemaphore {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	newWorkerPool := WorkerPoolSemaphore{
