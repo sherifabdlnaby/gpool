@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"golang.org/x/sync/semaphore"
+	"log"
 )
 
 type WorkerPoolSemaphore struct {
@@ -18,27 +19,37 @@ func (w *WorkerPoolSemaphore) Start() {
 }
 
 func (w *WorkerPoolSemaphore) Stop() {
-	w.ctx.Done()
+	log.Println("STOPPING...")
+	w.cancel()
 	_ = w.semaphore.Acquire(context.TODO(), w.WorkerCount)
+	w.semaphore.Release(w.WorkerCount)
 	return
 }
 
-func (w *WorkerPoolSemaphore) Enqueue(f func()) error {
-	err := w.semaphore.Acquire(w.ctx, 1)
+func (w *WorkerPoolSemaphore) Enqueue(ctx context.Context, f func()) error {
+	err := w.semaphore.Acquire(ctx, 1)
+
 	if err != nil {
 		return ErrWorkerPoolClosed2
 	}
-	go func() {
-		f()
-		w.semaphore.Release(1)
-	}()
-	return nil
 
+	select {
+	case <-w.ctx.Done():
+		w.semaphore.Release(1)
+		return ErrWorkerPoolClosed1
+	default:
+		go func() {
+			f()
+			w.semaphore.Release(1)
+		}()
+	}
+
+	return nil
 }
 
 var (
 	//DIFFERENT NAME FOR DEBUGGING ONLY //TODO only1
-	ErrWorkerPoolClosed1 = errors.New("pool is closed ( By checking for OK )")
+	ErrWorkerPoolClosed1 = errors.New("pool is closed ( By checking w.ctx.Done() )")
 	ErrWorkerPoolClosed2 = errors.New("pool is closed ( By checking <-ctx.Done() )")
 	ErrWorkTimeout       = errors.New("timeout")
 )
