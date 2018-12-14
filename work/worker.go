@@ -1,11 +1,18 @@
-package worker
+package dpool
 
 import (
 	"context"
+	"errors"
 )
 
-type ConcurrencyBounder interface {
+type Pool interface {
 	Start()
 	Stop()
 	Enqueue(context.Context, func()) error
+	TryEnqueue(func()) (bool, error)
 }
+
+var (
+	ErrPoolClosed = errors.New("pool is closed")
+	ErrJobTimeout = errors.New("job canceled")
+)
