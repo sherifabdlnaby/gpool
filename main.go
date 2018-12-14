@@ -3,11 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"pipeline/work"
-	"pipeline/workerpool"
 	"time"
 )
 
@@ -22,34 +19,25 @@ func (sh *stringHasher) Run(s int) int {
 	return s
 }
 
-const WORKER_COUNT = 1
+const WORKER_COUNT = 0
 
 var sr = stringHasher{}
 
 func main() {
-
-	helloHandler := func(w http.ResponseWriter, req *http.Request) {
-		panic("adsf")
-		io.WriteString(w, "Hello, world!\n")
-	}
-
-	http.HandleFunc("/hello", helloHandler)
-	log.Fatal(http.ListenAndServe(":8080", nil))
-
-	var workerPool worker.ConcurrencyBounder
+	var workerPool dpool.Pool
 	//workerPool = workerpooldispatch.NewWorkerPool(WORKER_COUNT)
-	workerPool = workerpool.NewWorkerPool(WORKER_COUNT)
+	workerPool = dpool.NewSemaphorePool(WORKER_COUNT)
 	workerPool.Start()
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	//workerPool.Stop()
-	workerPool.Stop()
-
+	//workerPool.Stop()
+	cancel()
+	time.Sleep(3000 * time.Millisecond)
 	go func() {
 		for i := 0; i < 10; i++ {
 			go func(i int) {
 				x := make(chan int, 1)
 				err := workerPool.Enqueue(ctx, func() {
-					panic("lol")
 					x <- sr.Run(i)
 				})
 				if err != nil {

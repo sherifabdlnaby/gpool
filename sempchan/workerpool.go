@@ -1,15 +1,13 @@
-package semp
+package sempchan
 
 import (
 	"context"
 	"errors"
-	"golang.org/x/sync/semaphore"
-	"log"
 )
 
 type WorkerPoolSemaphore struct {
 	WorkerCount int64
-	semaphore   semaphore.Weighted
+	semaphore   chan struct{}
 	ctx         context.Context
 	cancel      context.CancelFunc
 }
@@ -19,28 +17,27 @@ func (w *WorkerPoolSemaphore) Start() {
 }
 
 func (w *WorkerPoolSemaphore) Stop() {
-	log.Println("STOPPING...")
+	//log.Println("STOPPING...")
 	w.cancel()
-	_ = w.semaphore.Acquire(context.TODO(), w.WorkerCount)
-	w.semaphore.Release(w.WorkerCount)
+	for i := 0; i < int(w.WorkerCount); i++ {
+		w.semaphore <- struct{}{}
+	}
+	for i := 0; i < int(w.WorkerCount); i++ {
+		<-w.semaphore
+	}
 	return
 }
 
 func (w *WorkerPoolSemaphore) Enqueue(ctx context.Context, f func()) error {
-	err := w.semaphore.Acquire(ctx, 1)
-
-	if err != nil {
-		return ErrWorkerPoolClosed2
-	}
-
 	select {
 	case <-w.ctx.Done():
-		w.semaphore.Release(1)
 		return ErrWorkerPoolClosed1
-	default:
+	case <-ctx.Done():
+		return ErrWorkerPoolClosed2
+	case w.semaphore <- struct{}{}:
 		go func() {
 			f()
-			w.semaphore.Release(1)
+			<-w.semaphore
 		}()
 	}
 
@@ -61,7 +58,7 @@ func NewSempWorker(workerCount int64) *WorkerPoolSemaphore {
 		WorkerCount: workerCount,
 		ctx:         ctx,
 		cancel:      cancel,
-		semaphore:   *semaphore.NewWeighted(int64(workerCount)),
+		semaphore:   make(chan struct{}, workerCount),
 	}
 	return &newWorkerPool
 }
