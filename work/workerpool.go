@@ -5,6 +5,8 @@ import (
 	"sync"
 )
 
+// --------- POOL --------- ///
+
 type WorkerPool struct {
 	workerCount int
 	workerQueue chan chan func()
@@ -18,6 +20,12 @@ func NewWorkerPool(workerCount int) *WorkerPool {
 	newWorkerPool := WorkerPool{
 		workerCount: workerCount,
 	}
+
+	// Cancel immediately - So that ErrPoolClosed will be returned by Enqueues
+	// A Not Canceled context will be assigned by Start().
+	newWorkerPool.ctx, newWorkerPool.cancel = context.WithCancel(context.TODO())
+	newWorkerPool.cancel()
+
 	return &newWorkerPool
 }
 
@@ -59,10 +67,10 @@ func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
 	select {
 	// The Job was canceled through job's context, no need to DO the work now.
 	case <-ctx.Done():
-		return ctx.Err()
+		return ErrJobTimeout
 	// Pool Cancellation Signal.
 	case <-w.ctx.Done():
-		return w.ctx.Err()
+		return ErrPoolClosed
 	case workerReceiveChan := <-w.workerQueue:
 		select {
 		// Send the job to worker.
@@ -71,38 +79,37 @@ func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
 		// This is in-case the worker has been stopped (via cancellation signal) BEFORE we send the job to it,
 		// Hence it won't receive the job and would block.
 		case <-w.ctx.Done():
-			return w.ctx.Err()
+			return ErrPoolClosed
 		}
 	}
 }
 
-func (w *WorkerPool) TryEnqueue(f func()) (bool, error) {
+func (w *WorkerPool) TryEnqueue(f func()) bool {
 	select {
 
 	case workerReceiveChan := <-w.workerQueue:
 		select {
 		// Send the job to worker.
 		case workerReceiveChan <- f:
-			return true, nil
+			return true
 		// This is in-case the worker has been stopped (via cancellation signal) BEFORE we send the job to it,
 		// Hence it won't receive the job and would block.
 		case <-w.ctx.Done():
-			return false, w.ctx.Err()
+			return false
 		}
 	default:
-		return false, nil
+		return false
 	}
 }
 
-/////
-/////   WORKER
+// --------- WORKER --------- ///
+
 type worker struct {
 	ID      int
 	Worker  chan chan func()
 	Receive chan func()
 }
 
-// start worker
 func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Add(1)
 	go func() {
