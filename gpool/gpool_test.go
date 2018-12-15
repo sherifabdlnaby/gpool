@@ -1,7 +1,9 @@
-package dpool
+package gpool
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -92,12 +94,12 @@ func TestWorkerPool_Enqueue(t *testing.T) {
 
 			/// SEND 4 JOBS (  TWO TO FILL THE POOL, A ONE TO BE CANCELED BY CTX, AND ONE TO WAIT THE FIRST TWO )
 			// Two Jobs
-			Err1 := pool.Enqueue(ctx, func() { time.Sleep(500 * time.Millisecond); a <- 123 })
-			Err2 := pool.Enqueue(ctx, func() { time.Sleep(500 * time.Millisecond); b <- 123 })
+			Err1 := pool.Enqueue(ctx, func() { time.Sleep(100 * time.Millisecond); a <- 123 })
+			Err2 := pool.Enqueue(ctx, func() { time.Sleep(100 * time.Millisecond); b <- 123 })
 			// Canceled Job
 			Err3 := pool.Enqueue(canceledCox, func() { c <- 123 })
 			// Waiting Job
-			_ = pool.Enqueue(ctx, func() { d <- 123 })
+			_ = pool.Enqueue(ctx, func() { time.Sleep(100 * time.Millisecond); d <- 123 })
 
 			if Err1 != nil {
 				t.Errorf("Returned Error and it shouldn't #1, Error: %s", Err1.Error())
@@ -131,5 +133,94 @@ func TestWorkerPool_Enqueue(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func BenchmarkOneJob(b *testing.B) {
+	var workersCountValues = []int{10, 10000}
+	for i := 0; i < 2; i++ {
+		for _, workercount := range workersCountValues {
+			var workerPool Pool
+			var name string
+			if i == 0 {
+				name = "Workerpool"
+			}
+			if i == 1 {
+				name = "SemaphorePool"
+			}
+
+			b.Run(fmt.Sprintf("[%s]W[%d]", name, workercount), func(b *testing.B) {
+				if i == 0 {
+					workerPool = NewWorkerPool(workercount)
+				}
+				if i == 1 {
+					workerPool = NewSemaphorePool(workercount)
+				}
+
+				workerPool.Start()
+
+				b.ResetTimer()
+
+				for i2 := 0; i2 < b.N; i2++ {
+					resultChan := make(chan int, 1)
+					_ = workerPool.Enqueue(context.TODO(), func() {
+						resultChan <- 123
+					})
+					<-resultChan
+				}
+
+				b.StopTimer()
+				workerPool.Stop()
+			})
+		}
+	}
+}
+
+func BenchmarkBulkJobs(b *testing.B) {
+	var workersCountValues = []int{10, 10000}
+	var workAmountValues = []int{1000, 10000, 100000}
+	for _, workercount := range workersCountValues {
+		for _, work := range workAmountValues {
+			for i := 0; i < 2; i++ {
+				var workerPool Pool
+				var name string
+				if i == 0 {
+					name = "Workerpool"
+				}
+				if i == 1 {
+					name = "Semaphore "
+				}
+
+				b.Run(fmt.Sprintf("[%s]W[%d]J[%d]", name, workercount, work), func(b *testing.B) {
+					if i == 0 {
+						workerPool = NewWorkerPool(workercount)
+					}
+					if i == 1 {
+						workerPool = NewSemaphorePool(workercount)
+					}
+					workerPool.Start()
+					b.ResetTimer()
+
+					for i2 := 0; i2 < b.N; i2++ {
+						wg := sync.WaitGroup{}
+						wg.Add(work)
+						for i3 := 0; i3 < work; i3++ {
+							go func() {
+								resultChan := make(chan int, 1)
+								_ = workerPool.Enqueue(context.TODO(), func() {
+									resultChan <- 123
+								})
+								<-resultChan
+								wg.Done()
+							}()
+						}
+						wg.Wait()
+					}
+
+					b.StopTimer()
+					workerPool.Stop()
+				})
+			}
+		}
 	}
 }

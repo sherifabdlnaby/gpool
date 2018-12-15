@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"gpool/gpool"
 	"log"
-	"pipeline/work"
 	"time"
 )
 
@@ -24,15 +24,14 @@ const WORKER_COUNT = 0
 var sr = stringHasher{}
 
 func main() {
-	var workerPool dpool.Pool
+	var workerPool gpool.Pool
 	//workerPool = workerpooldispatch.NewWorkerPool(WORKER_COUNT)
-	workerPool = dpool.NewSemaphorePool(WORKER_COUNT)
+	workerPool = gpool.NewSemaphorePool(WORKER_COUNT)
 	workerPool.Start()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, _ := context.WithCancel(context.Background())
 	//workerPool.Stop()
-	//workerPool.Stop()
-	cancel()
-	time.Sleep(3000 * time.Millisecond)
+	workerPool.Stop()
+	//cancel()
 	go func() {
 		for i := 0; i < 10; i++ {
 			go func(i int) {

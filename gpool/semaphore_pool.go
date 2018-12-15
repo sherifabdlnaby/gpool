@@ -1,4 +1,4 @@
-package dpool
+package gpool
 
 import (
 	"context"
@@ -15,7 +15,7 @@ type SemaphorePool struct {
 func NewSemaphorePool(workerCount int) *SemaphorePool {
 	newWorkerPool := SemaphorePool{
 		WorkerCount: workerCount,
-		semaphore:   *semaphore.NewWeighted(int64(workerCount)),
+		semaphore:   *semaphore.NewWeighted(1),
 	}
 
 	// Cancel immediately - So that ErrPoolClosed will be returned by Enqueues
@@ -42,6 +42,12 @@ func (w *SemaphorePool) Stop() {
 
 	// Release the Semaphore so that subsequent enqueues will not block and return ErrPoolClosed.
 	w.semaphore.Release(int64(w.WorkerCount))
+
+	// This to give a breathing space for Enqueue to not wait for a Semaphore of 0 size.
+	// so that Enqueue won't block ( will still send ErrPoolClosed )
+	if w.WorkerCount == 0 {
+		w.semaphore = *semaphore.NewWeighted(1)
+	}
 
 	return
 }

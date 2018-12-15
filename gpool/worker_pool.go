@@ -1,4 +1,4 @@
-package dpool
+package gpool
 
 import (
 	"context"
@@ -63,7 +63,6 @@ func (w *WorkerPool) Stop() {
 }
 
 func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
-
 	select {
 	// The Job was canceled through job's context, no need to DO the work now.
 	case <-ctx.Done():

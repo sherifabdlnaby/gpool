@@ -1,4 +1,4 @@
-package dpool
+package gpool
 
 import (
 	"context"
