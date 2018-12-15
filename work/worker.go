@@ -9,7 +9,7 @@ type Pool interface {
 	Start()
 	Stop()
 	Enqueue(context.Context, func()) error
-	TryEnqueue(func()) (bool, error)
+	TryEnqueue(func()) bool
 }
 
 var (

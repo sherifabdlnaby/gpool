@@ -6,23 +6,30 @@ import (
 )
 
 type SemaphorePool struct {
-	WorkerCount int64
+	WorkerCount int
 	semaphore   semaphore.Weighted
 	ctx         context.Context
 	cancel      context.CancelFunc
 }
 
-func NewSemaphorePool(workerCount int64) *SemaphorePool {
+func NewSemaphorePool(workerCount int) *SemaphorePool {
 	newWorkerPool := SemaphorePool{
 		WorkerCount: workerCount,
+		semaphore:   *semaphore.NewWeighted(int64(workerCount)),
 	}
+
+	// Cancel immediately - So that ErrPoolClosed will be returned by Enqueues
+	// A Not Canceled context will be assigned by Start().
+	newWorkerPool.ctx, newWorkerPool.cancel = context.WithCancel(context.TODO())
+	newWorkerPool.cancel()
+
 	return &newWorkerPool
 }
 
 func (w *SemaphorePool) Start() {
 	ctx := context.Background()
 	w.ctx, w.cancel = context.WithCancel(ctx)
-	w.semaphore = *semaphore.NewWeighted(w.WorkerCount)
+	w.semaphore = *semaphore.NewWeighted(int64(w.WorkerCount))
 	return
 }
 
@@ -31,62 +38,62 @@ func (w *SemaphorePool) Stop() {
 	w.cancel()
 
 	// Try to Acquire the whole Semaphore ( This will block until all ACTIVE works are done )
-	_ = w.semaphore.Acquire(context.TODO(), w.WorkerCount)
+	_ = w.semaphore.Acquire(context.TODO(), int64(w.WorkerCount))
 
-	// Release the Semaphore so that subsequent
-	w.semaphore.Release(w.WorkerCount)
+	// Release the Semaphore so that subsequent enqueues will not block and return ErrPoolClosed.
+	w.semaphore.Release(int64(w.WorkerCount))
 
 	return
 }
 
-func (w *SemaphorePool) Enqueue(ctx context.Context, f func()) error {
+func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	err := w.semaphore.Acquire(ctx, 1)
 
 	// The Job was canceled through job's context, no need to DO the work now.
 	if err != nil {
-		return ErrWorkerPoolClosed2
+		return ErrJobTimeout
 	}
 
 	select {
 	// Pool Cancellation Signal
 	case <-w.ctx.Done():
 		w.semaphore.Release(1)
-		return ErrWorkerPoolClosed1
+		return ErrPoolClosed
 	default:
 		go func() {
 			defer func() {
 				w.semaphore.Release(1)
 				/*				if r := recover(); r != nil {
-								fmt.Println("Recovered in f", r)
+								fmt.Println("Recovered in job", r)
 							}*/
 			}()
 
 			// Run the Function
-			f()
+			job()
 		}()
 	}
 
 	return nil
 }
 
-func (w *SemaphorePool) TryEnqueue(f func()) (bool, error) {
+func (w *SemaphorePool) TryEnqueue(job func()) bool {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	if !w.semaphore.TryAcquire(1) {
-		return false, nil
+		return false
 	}
 
 	go func() {
 		defer func() {
 			w.semaphore.Release(1)
 			/*				if r := recover(); r != nil {
-							fmt.Println("Recovered in f", r)
+							fmt.Println("Recovered in job", r)
 						}*/
 		}()
 
 		// Run the Function
-		f()
+		job()
 	}()
 
-	return true, nil
+	return true
 }
