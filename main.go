@@ -19,7 +19,7 @@ func (sh *stringHasher) Run(s int) int {
 	return s
 }
 
-const WORKER_COUNT = 0
+const WORKER_COUNT = 1
 
 var sr = stringHasher{}
 
@@ -30,28 +30,34 @@ func main() {
 	workerPool.Start()
 	ctx, _ := context.WithCancel(context.Background())
 	//workerPool.Stop()
-	workerPool.Stop()
+
 	//cancel()
 	go func() {
 		for i := 0; i < 10; i++ {
 			go func(i int) {
 				x := make(chan int, 1)
+				fmt.Println("ENQUEUED")
 				err := workerPool.Enqueue(ctx, func() {
+					time.Sleep(100 * time.Millisecond)
 					x <- sr.Run(i)
 				})
 				if err != nil {
 					log.Println(err.Error())
 					return
 				}
-				fmt.Print(<-x)
-				fmt.Println("LOL")
+				fmt.Println(<-x)
 			}(i)
 		}
 	}()
 
-	time.Sleep(4000 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	//cancel()
 
+	fmt.Println("Stopping")
+
+	workerPool.Stop()
+
 	fmt.Println("DONE")
+
 	time.Sleep(50000 * time.Millisecond)
 }

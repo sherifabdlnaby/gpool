@@ -76,7 +76,7 @@ func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
 		case workerReceiveChan <- f:
 			return nil
 		// This is in-case the worker has been stopped (via cancellation signal) BEFORE we send the job to it,
-		// Hence it won't receive the job and would block.
+		// Hence it won't receive the job and will block.
 		case <-w.ctx.Done():
 			return ErrPoolClosed
 		}
@@ -109,10 +109,18 @@ type worker struct {
 	Receive chan func()
 }
 
-func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) {
+func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) bool {
 	wg.Add(1)
+
+	// Send Signal that the below goroutine has started already
+	// Handles when TryEnqueue Returns FALSE if immediately called after starting the pool
+	// As the worker goroutines may still have not yet launched
+
+	started := make(chan bool, 1)
+
 	go func() {
 		defer wg.Done()
+		started <- true
 		for {
 			w.Worker <- w.Receive
 			select {
@@ -123,4 +131,5 @@ func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) {
 			}
 		}
 	}()
+	return <-started
 }

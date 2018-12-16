@@ -44,7 +44,7 @@ func (w *SemaphorePool) Stop() {
 	w.semaphore.Release(int64(w.WorkerCount))
 
 	// This to give a breathing space for Enqueue to not wait for a Semaphore of 0 size.
-	// so that Enqueue won't block ( will still send ErrPoolClosed )
+	// so that Enqueue won't block ( will still send ErrPoolClosed, no job will run )
 	if w.WorkerCount == 0 {
 		w.semaphore = *semaphore.NewWeighted(1)
 	}
@@ -70,9 +70,10 @@ func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
 		go func() {
 			defer func() {
 				w.semaphore.Release(1)
-				/*				if r := recover(); r != nil {
-								fmt.Println("Recovered in job", r)
-							}*/
+				/*
+					if r := recover(); r != nil {
+					fmt.Println("Recovered in job", r)
+					}*/
 			}()
 
 			// Run the Function
@@ -89,17 +90,25 @@ func (w *SemaphorePool) TryEnqueue(job func()) bool {
 		return false
 	}
 
-	go func() {
-		defer func() {
-			w.semaphore.Release(1)
-			/*				if r := recover(); r != nil {
-							fmt.Println("Recovered in job", r)
-						}*/
-		}()
+	select {
+	// Pool Cancellation Signal
+	case <-w.ctx.Done():
+		w.semaphore.Release(1)
+		return false
+	default:
+		go func() {
+			defer func() {
+				w.semaphore.Release(1)
+				/*
+					if r := recover(); r != nil {
+					fmt.Println("Recovered in a job", r)
+					}*/
+			}()
 
-		// Run the Function
-		job()
-	}()
+			// Run the Function
+			job()
+		}()
+	}
 
 	return true
 }
