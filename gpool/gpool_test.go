@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -41,6 +42,17 @@ func TestWorkerPool_Start(t *testing.T) {
 
 			if Err != nil {
 				t.Errorf("Pool Enqueued Errored after Start. Error: %s", Err.Error())
+			}
+
+			/// Test Restarting the Pool
+			pool.Stop()
+
+			pool.Start()
+
+			Err = pool.Enqueue(context.TODO(), func() {})
+
+			if Err != nil {
+				t.Errorf("Pool Enqueued Errored after restart. Error: %s", Err.Error())
 			}
 
 		})
@@ -136,8 +148,203 @@ func TestWorkerPool_Enqueue(t *testing.T) {
 	}
 }
 
+func TestWorkerPool_Enqueue0Worker(t *testing.T) {
+
+	var implementations = []struct {
+		name string
+		impl Pool
+	}{
+		{name: "Workerpool", impl: NewWorkerPool(0)},
+		{name: "SemaphorePool", impl: NewSemaphorePool(0)},
+	}
+
+	for _, poolImpl := range implementations {
+
+		pool := poolImpl.impl
+
+		t.Run(poolImpl.name, func(t *testing.T) {
+
+			Err := pool.Enqueue(context.TODO(), func() {})
+
+			if Err != ErrPoolClosed {
+				t.Errorf("Should Return ErrPoolClosed")
+			}
+
+			pool.Stop()
+
+			Err = pool.Enqueue(context.TODO(), func() {})
+
+			if Err != ErrPoolClosed {
+				t.Errorf("Should Return ErrPoolClosed after Stopping and Not Started Pool of 0 Workers")
+			}
+
+		})
+	}
+}
+
+func TestWorkerPool_Stop(t *testing.T) {
+
+	workerCount := 10
+
+	var implementations = []struct {
+		name string
+		impl Pool
+	}{
+		{name: "Workerpool", impl: NewWorkerPool(workerCount)},
+		{name: "SemaphorePool", impl: NewSemaphorePool(workerCount)},
+	}
+
+	for _, poolImpl := range implementations {
+
+		pool := poolImpl.impl
+
+		t.Run(poolImpl.name, func(t *testing.T) {
+
+			/// Start Worker
+			pool.Start()
+			pool.Stop()
+
+			x := make(chan int, 1)
+
+			Err := pool.Enqueue(context.TODO(), func() {
+				x <- 123
+			})
+
+			if Err == nil {
+				t.Errorf("Accepted Job after Stopping the pool")
+			}
+			if Err != ErrPoolClosed {
+				t.Errorf("Returned Incorrect Error after sending job to stopped pool")
+			}
+
+			// Start Worker Again
+			pool.Start()
+
+			// SEND 10 JOBS
+			var doneJobs int32 = 0
+
+			for i := 0; i < workerCount*10; i++ {
+				_ = pool.Enqueue(context.TODO(), func() {
+					time.Sleep(100 * time.Millisecond)
+					atomic.AddInt32(&doneJobs, 1)
+				})
+			}
+
+			pool.Stop()
+
+			if doneJobs != int32(workerCount*10) {
+				t.Errorf("Stop returned before all running jobs is done.")
+			}
+
+		})
+	}
+}
+
+func TestWorkerPool_TryEnqueue(t *testing.T) {
+
+	var implementations = []struct {
+		name string
+		impl Pool
+	}{
+		{name: "Workerpool", impl: NewWorkerPool(2)},
+		{name: "SemaphorePool", impl: NewSemaphorePool(2)},
+	}
+
+	for _, poolImpl := range implementations {
+
+		pool := poolImpl.impl
+
+		t.Run(poolImpl.name, func(t *testing.T) {
+			x := make(chan int, 1)
+
+			/// Start Worker
+			pool.Start()
+
+			success := pool.TryEnqueue(func() {
+				x <- 123
+			})
+
+			if success != true {
+				t.Errorf("TryEnqueue an empty pool failed")
+			}
+
+			result := <-x
+
+			if result != 123 {
+				t.Errorf("Wrong Result by Job")
+			}
+
+			pool.Stop()
+			pool.Start()
+
+			/// TEST BLOCKING
+			a := make(chan int)
+			b := make(chan int)
+			c := make(chan int)
+
+			/// SEND 4 JOBS (  TWO TO FILL THE POOL, A ONE TO BE CANCELED BY CTX, AND ONE TO WAIT THE FIRST TWO )
+			// Two Jobs
+			success1 := pool.TryEnqueue(func() { a <- 123 })
+			success2 := pool.TryEnqueue(func() { b <- 123 })
+
+			if success1 == false || success2 == false {
+				t.Errorf("Failed to TryEnqueue to the MAX pool limit.")
+			}
+
+			success3 := pool.TryEnqueue(func() { c <- 123 })
+
+			if success3 == true {
+				t.Errorf("TryEnqueue success on a FILLED queue")
+			}
+
+			<-a
+			<-b
+		})
+	}
+}
+
+func TestWorkerPool_TryEnqueue0Worker(t *testing.T) {
+
+	var implementations = []struct {
+		name string
+		impl Pool
+	}{
+		{name: "Workerpool", impl: NewWorkerPool(0)},
+		{name: "SemaphorePool", impl: NewSemaphorePool(0)},
+	}
+
+	for _, poolImpl := range implementations {
+
+		pool := poolImpl.impl
+
+		t.Run(poolImpl.name, func(t *testing.T) {
+			x := make(chan int, 1)
+
+			/// Start Worker
+			pool.Start()
+
+			success := pool.TryEnqueue(func() {
+				x <- 123
+			})
+
+			if success == true {
+				t.Errorf("TryEnqueue success on a WorkerCount=0 queue!")
+			}
+
+			pool.Stop()
+
+			/// TEST BLOCKING
+			a := make(chan int)
+			success1 := pool.TryEnqueue(func() { a <- 123 })
+			if success1 == true {
+				t.Errorf("TryEnqueue success on a CLOSED queue.")
+			}
+		})
+	}
+}
+
 func BenchmarkOneJob(b *testing.B) {
-	var workersCountValues = []int{10, 10000}
+	var workersCountValues = []int{10, 100, 1000, 10000}
 	for i := 0; i < 2; i++ {
 		for _, workercount := range workersCountValues {
 			var workerPool Pool
