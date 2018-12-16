@@ -8,19 +8,21 @@ import (
 	"time"
 )
 
-const WORKER_COUNT = 2
+// WorkerCount Number of Workers / Concurrent jobs of the Pool
+const WorkerCount = 2
 
 func main() {
 	var workerPool gpool.Pool
 
 	//workerPool = workerpooldispatch.NewWorkerPool(WORKER_COUNT)
-	workerPool = gpool.NewSemaphorePool(WORKER_COUNT)
+	workerPool = gpool.NewSemaphorePool(WorkerCount)
 
 	log.Println("Starting Pool...")
 
 	workerPool.Start()
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	go func() {
 		for i := 0; i < 10; i++ {
@@ -41,9 +43,9 @@ func main() {
 				if err != nil {
 					log.Printf("Job [%v] was not enqueued. [%s]", i, err.Error())
 					return
-				} else {
-					log.Printf("Job [%v] Enqueue-ed ", i)
 				}
+
+				log.Printf("Job [%v] Enqueue-ed ", i)
 
 				log.Printf("Job [%v] Receieved [%v]", i, <-x)
 			}(i)
