@@ -5,8 +5,7 @@ import (
 	"sync"
 )
 
-// --------- POOL --------- ///
-
+// WorkerPool is an implementation of gpool.Pool interface to bound concurrency using a Worker goroutines.
 type WorkerPool struct {
 	workerCount int
 	workerQueue chan chan func()
@@ -16,6 +15,7 @@ type WorkerPool struct {
 	cancel      context.CancelFunc
 }
 
+// NewWorkerPool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
 func NewWorkerPool(workerCount int) *WorkerPool {
 	newWorkerPool := WorkerPool{
 		workerCount: workerCount,
@@ -29,6 +29,7 @@ func NewWorkerPool(workerCount int) *WorkerPool {
 	return &newWorkerPool
 }
 
+// Start the Pool, otherwise it will not accept any job.
 func (w *WorkerPool) Start() {
 	ctx := context.Background()
 
@@ -54,6 +55,10 @@ func (w *WorkerPool) Start() {
 	}
 }
 
+// Stop the Pool.
+// 1- ALL Blocked/Waiting jobs will return immediately.
+// 2- All Jobs Processing will finish successfully
+// 3- Stop() WILL Block until all running jobs is done.
 func (w *WorkerPool) Stop() {
 	// Send Cancellation Signal to stop all waiting work
 	w.cancel()
@@ -62,6 +67,14 @@ func (w *WorkerPool) Stop() {
 	w.wg.Wait()
 }
 
+// Enqueue Process job func(){} and returns ONCE the func has started (not after it ends)
+// If the pool is full pool.Enqueue() will block until either:
+// 		1- A worker/slot in the pool is done and is ready to take another job.
+//		2- The Job context is canceled.
+//		3- The Pool is closed by pool.Stop().
+// @Returns nil once the job has started.
+// @Returns ErrPoolClosed if the pool is not running.
+// @Returns ErrJobTimeout if the job Enqueued context was canceled before the job could be processed by the pool.
 func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
 	select {
 	// The Job was canceled through job's context, no need to DO the work now.
@@ -83,6 +96,8 @@ func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
 	}
 }
 
+// TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if
+// the pool is closed or full.
 func (w *WorkerPool) TryEnqueue(f func()) bool {
 	select {
 

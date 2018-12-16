@@ -27,7 +27,7 @@ func main() {
 	var workerPool gpool.Pool
 	//workerPool = workerpooldispatch.NewWorkerPool(WORKER_COUNT)
 	workerPool = gpool.NewSemaphorePool(WORKER_COUNT)
-	workerPool.Start()
+	workerPool.St()
 	ctx, _ := context.WithCancel(context.Background())
 	//workerPool.Stop()
 

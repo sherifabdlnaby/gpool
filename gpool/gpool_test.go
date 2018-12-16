@@ -221,7 +221,7 @@ func TestWorkerPool_Stop(t *testing.T) {
 			pool.Start()
 
 			// SEND 10 JOBS
-			var doneJobs int32 = 0
+			var doneJobs int32
 
 			for i := 0; i < workerCount*10; i++ {
 				_ = pool.Enqueue(context.TODO(), func() {

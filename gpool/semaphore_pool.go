@@ -5,6 +5,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// SemaphorePool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
 type SemaphorePool struct {
 	WorkerCount int
 	semaphore   semaphore.Weighted
@@ -12,6 +13,7 @@ type SemaphorePool struct {
 	cancel      context.CancelFunc
 }
 
+// NewSemaphorePool is SemaphorePool Constructor
 func NewSemaphorePool(workerCount int) *SemaphorePool {
 	newWorkerPool := SemaphorePool{
 		WorkerCount: workerCount,
@@ -26,6 +28,7 @@ func NewSemaphorePool(workerCount int) *SemaphorePool {
 	return &newWorkerPool
 }
 
+// Start the Pool, otherwise it will not accept any job.
 func (w *SemaphorePool) Start() {
 	ctx := context.Background()
 	w.ctx, w.cancel = context.WithCancel(ctx)
@@ -33,6 +36,10 @@ func (w *SemaphorePool) Start() {
 	return
 }
 
+// Stop the Pool.
+// 1- ALL Blocked/Waiting jobs will return immediately.
+// 2- All Jobs Processing will finish successfully
+// 3- Stop() WILL Block until all running jobs is done.
 func (w *SemaphorePool) Stop() {
 	// Send Cancellation Signal to stop all waiting work
 	w.cancel()
@@ -52,6 +59,14 @@ func (w *SemaphorePool) Stop() {
 	return
 }
 
+// Enqueue Process job func(){} and returns ONCE the func has started (not after it ends)
+// If the pool is full pool.Enqueue() will block until either:
+// 		1- A worker/slot in the pool is done and is ready to take another job.
+//		2- The Job context is canceled.
+//		3- The Pool is closed by pool.Stop().
+// @Returns nil once the job has started.
+// @Returns ErrPoolClosed if the pool is not running.
+// @Returns ErrJobTimeout if the job Enqueued context was canceled before the job could be processed by the pool.
 func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	err := w.semaphore.Acquire(ctx, 1)
@@ -84,6 +99,8 @@ func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
 	return nil
 }
 
+// TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if
+// the pool is closed or full.
 func (w *SemaphorePool) TryEnqueue(job func()) bool {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	if !w.semaphore.TryAcquire(1) {
@@ -104,7 +121,6 @@ func (w *SemaphorePool) TryEnqueue(job func()) bool {
 					fmt.Println("Recovered in a job", r)
 					}*/
 			}()
-
 			// Run the Function
 			job()
 		}()
