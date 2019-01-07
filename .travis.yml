@@ -26,4 +26,7 @@ notifications:
   email: false
 
 script:
-  - go test -v -race ./...  # Run all the tests with the race detector enabled
+  - go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...  # Run all the tests with the race detector enabled
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

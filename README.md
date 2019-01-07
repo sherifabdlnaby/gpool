@@ -6,13 +6,15 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/SherifAbdlNaby/gpool/blob/master/LICENSE)
 
 
-Easily manages a pool of context aware goroutines to bound concurrency, A Job is Enqueued to the pool and only `N` jobs can be processeing concurrently.
+Easily manages a resizeable pool of context aware goroutines to bound concurrency, A `Job` is Enqueued to the pool and only `N` jobs can be processing concurrently.
 
-When you `Enqueue` a job it will return ONCE the jobs **starts** processing otherwise if the pool is full it will **block** until: **(1)** pool has room for the job, **(2)** job's `context` is canceled, or **(3)** the pool is stopped.
+When you `Enqueue` a job it will return ONCE the job **starts** processing otherwise if the pool is full it will **block** until: **(1)** pool has room for the job, **(2)** job's `context` is canceled, or **(3)** the pool is stopped.
 
-Stopping the Pool using `pool.Stop()` will unblock any **blocked** enqueues and **wait** All active jobs to finish before returining.
+Stopping the Pool using `pool.Stop()` will unblock any **blocked** enqueues and **wait** All active jobs to finish before returning.
 
-Enqueuing a Job will return error `nil` once a job starts, `gpool.ErrPoolClosed` if the pool is closed, or `gpool.ErrTimeoutJob` if the job's context is cancled whil blocking waiting for the job.
+Enqueuing a Job will return error `nil` once a job starts, `gpool.ErrPoolClosed` if the pool is closed, or `gpool.ErrTimeoutJob` if the job's context is canceled while blocking waiting for the pool.
+
+The Pool can be re-sized using `Resize()` that will resize the pool in a concurrent safe-way. `Resize` can enlarge the pool so that any blocked enqueue will unblock after resize is called, in case of shrinking the pool `resize` will not affect any processing job.
 
 further documentation at : [![](https://godoc.org/github.com/SherifAbdlNaby/gpool?status.svg)](http://godoc.org/github.com/SherifAbdlNaby/gpool)
 
@@ -193,38 +195,58 @@ Sleeping for couple of seconds so canceled job have a chance to print out their 
 
 ## Benchmarks
 Benchmarks for the two goroutines pool implementation `Workerpool` & `Semaphore`.
-Semaphore is substainally better.
+Semaphore is substantially better.
 
+``` bash
+$ go test -bench=. -cpu=2 -benchmem
+```
+
+**S**[*n*] <- Size of Pool / N Concurrent work at the same time.
+
+**J**[*n*] <- Number of Jobs
+
+**BenchmarkOneThroughput/S[]** = Enqueue Async Jobs ( Will not wait for result ) in a Pool of size = `S`
+
+**BenchmarkOneJobSync/S[]**    = Enqueue One Jobs at a time and wait result (Pool will have at MAX one job running)
+
+**BenchmarkBulkJobs_UnderLimit/S[]J[]**   = Enqueue `J` Jobs In Pool of size `S` at a time where `J` < `S`
+
+**BenchmarkBulkJobs_OverLimit/S[]J[]**    = Enqueue `J` Jobs In Pool of size `S` at a time where `J` > `S`
 
 ```
 goos: darwin
 goarch: amd64
-pkg: gpool
-BenchmarkOneJob/[Workerpool]W[10]-2              1000000              1721 ns/op             128 B/op          2 allocs/op
-BenchmarkOneJob/[Workerpool]W[100]-2             1000000              1722 ns/op             128 B/op          2 allocs/op
-BenchmarkOneJob/[Workerpool]W[1000]-2            1000000              1729 ns/op             128 B/op          2 allocs/op
-BenchmarkOneJob/[Workerpool]W[10000]-2            500000              2560 ns/op             128 B/op          2 allocs/op
-BenchmarkOneJob/[SemaphorePool]W[10]-2           1000000              1089 ns/op             128 B/op          2 allocs/op
-BenchmarkOneJob/[SemaphorePool]W[100]-2          1000000              1092 ns/op             128 B/op          2 allocs/op
-BenchmarkOneJob/[SemaphorePool]W[1000]-2         1000000              1087 ns/op             128 B/op          2 allocs/op
-BenchmarkOneJob/[SemaphorePool]W[10000]-2        1000000              1091 ns/op             128 B/op          2 allocs/op
-BenchmarkBulkJobs/[Workerpool]W[10]J[1000]-2                2000           1054296 ns/op          128044 B/op       2001 allocs/op
-BenchmarkBulkJobs/[Semaphore_]W[10]J[1000]-2                2000            602012 ns/op          128047 B/op       2001 allocs/op
-BenchmarkBulkJobs/[Workerpool]W[10]J[10000]-2                100          12345006 ns/op         1280016 B/op      20001 allocs/op
-BenchmarkBulkJobs/[Semaphore_]W[10]J[10000]-2                200           7715572 ns/op         1290186 B/op      20113 allocs/op
-BenchmarkBulkJobs/[Workerpool]W[10]J[100000]-2                10         128414983 ns/op        12800035 B/op     200001 allocs/op
-BenchmarkBulkJobs/[Semaphore_]W[10]J[100000]-2                20         101069406 ns/op        12975425 B/op     200430 allocs/op
-BenchmarkBulkJobs/[Workerpool]W[10000]J[1000]-2             1000           1417746 ns/op          128019 B/op       2001 allocs/op
-BenchmarkBulkJobs/[Semaphore_]W[10000]J[1000]-2             3000            618805 ns/op          128016 B/op       2001 allocs/op
-BenchmarkBulkJobs/[Workerpool]W[10000]J[10000]-2             100          16056593 ns/op         1280204 B/op      20002 allocs/op
-BenchmarkBulkJobs/[Semaphore_]W[10000]J[10000]-2             200           7314480 ns/op         1280036 B/op      20001 allocs/op
-BenchmarkBulkJobs/[Workerpool]W[10000]J[100000]-2             10         177255711 ns/op        13081756 B/op     200755 allocs/op
-BenchmarkBulkJobs/[Semaphore_]W[10000]J[100000]-2             20         101682123 ns/op        12820804 B/op     200217 allocs/op
+pkg: github.com/sherifabdlnaby/gpool
+BenchmarkOneThroughput/[Semaphore]S[10]-2                5000000               258 ns/op              14 B/op          0 allocs/op
+BenchmarkOneThroughput/[Semaphore]S[100]-2               5000000               264 ns/op               0 B/op          0 allocs/op
+BenchmarkOneThroughput/[Semaphore]S[1000]-2              5000000               279 ns/op               0 B/op          0 allocs/op
+BenchmarkOneThroughput/[Semaphore]S[10000]-2             5000000               284 ns/op               0 B/op          0 allocs/op
+BenchmarkOneThroughput/[Workerpool]S[10]-2               5000000               367 ns/op               0 B/op          0 allocs/op
+BenchmarkOneThroughput/[Workerpool]S[100]-2              5000000               329 ns/op               0 B/op          0 allocs/op
+BenchmarkOneThroughput/[Workerpool]S[1000]-2             5000000               325 ns/op               0 B/op          0 allocs/op
+BenchmarkOneThroughput/[Workerpool]S[10000]-2            3000000               534 ns/op               0 B/op          0 allocs/op
+BenchmarkOneJobSync/[Semaphore]S[10]-2                   2000000               909 ns/op              16 B/op          1 allocs/op
+BenchmarkOneJobSync/[Semaphore]S[100]-2                  2000000               911 ns/op              16 B/op          1 allocs/op
+BenchmarkOneJobSync/[Semaphore]S[1000]-2                 2000000               914 ns/op              16 B/op          1 allocs/op
+BenchmarkOneJobSync/[Semaphore]S[10000]-2                2000000               910 ns/op              16 B/op          1 allocs/op
+BenchmarkOneJobSync/[Workerpool]S[10]-2                  1000000              1218 ns/op              16 B/op          1 allocs/op
+BenchmarkOneJobSync/[Workerpool]S[100]-2                 1000000              1349 ns/op              16 B/op          1 allocs/op
+BenchmarkOneJobSync/[Workerpool]S[1000]-2                1000000              1232 ns/op              16 B/op          1 allocs/op
+BenchmarkOneJobSync/[Workerpool]S[10000]-2               1000000              2137 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_UnderLimit/[Semaphore]S[10000]J[100]-2                   30000             40378 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_UnderLimit/[Semaphore]S[10000]J[1000]-2                   5000            363141 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_UnderLimit/[Semaphore]S[10000]J[10000]-2                   300           4042157 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_UnderLimit/[Workerpool]S[10000]J[100]-2                  20000             69548 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_UnderLimit/[Workerpool]S[10000]J[1000]-2                  2000            714208 ns/op              70 B/op          1 allocs/op
+BenchmarkBulkJobs_UnderLimit/[Workerpool]S[10000]J[10000]-2                  200           8868398 ns/op              21 B/op          1 allocs/op
+BenchmarkBulkJobs_OverLimit/[Semaphore]S[100]J[1000]-2                      5000            362379 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_OverLimit/[Semaphore]S[100]J[10000]-2                      300           4054593 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_OverLimit/[Semaphore]S[1000]J[1000]-2                     5000            361441 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_OverLimit/[Semaphore]S[1000]J[10000]-2                     300           4057458 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_OverLimit/[Workerpool]S[100]J[1000]-2                     3000            514161 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_OverLimit/[Workerpool]S[100]J[10000]-2                     200           6305356 ns/op              16 B/op          1 allocs/op
+BenchmarkBulkJobs_OverLimit/[Workerpool]S[1000]J[1000]-2                    3000            525189 ns/op              20 B/op          1 allocs/op
+BenchmarkBulkJobs_OverLimit/[Workerpool]S[1000]J[10000]-2                    200           7027354 ns/op              30 B/op          1 allocs/op
 PASS
-ok      gpool   36.814s
+ok      github.com/sherifabdlnaby/gpool 58.464s
 ```
-
-
-**W**[*n*] <- How many Worker/Concurrency working at the same time.
-
-**J**[*n*] <- Number of Jobs
