@@ -12,7 +12,7 @@ import (
 //		3- The Pool is closed by pool.Stop().
 type Pool interface {
 	// Start the Pool, otherwise it will not accept any job.
-	Start()
+	Start() error
 
 	// Stop the Pool.
 	//	1- ALL Blocked/Waiting jobs will return immediately.
@@ -36,6 +36,9 @@ type Pool interface {
 }
 
 var (
+	// ErrPoolClosed Error Returned if the Pool has not started yet, or was stopped.
+	ErrPoolInvalidSize = errors.New("pool size is invalid, pool size must be > 0")
+
 	// ErrPoolClosed Error Returned if the Pool has not started yet, or was stopped.
 	ErrPoolClosed = errors.New("pool is closed")
 

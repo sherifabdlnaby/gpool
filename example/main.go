@@ -14,12 +14,15 @@ const WorkerCount = 2
 func main() {
 	var workerPool gpool.Pool
 
-	//workerPool = workerpooldispatch.NewWorkerPool(WORKER_COUNT)
 	workerPool = gpool.NewSemaphorePool(WorkerCount)
 
 	log.Println("Starting Pool...")
 
-	workerPool.Start()
+	err := workerPool.Start()
+
+	if err != nil {
+		panic(err)
+	}
 
 	ctx, _ := context.WithCancel(context.Background())
 

@@ -5,8 +5,8 @@ import (
 	"sync"
 )
 
-// WorkerPool is an implementation of gpool.Pool interface to bound concurrency using a Worker goroutines.
-type WorkerPool struct {
+// workerPool is an implementation of gpool.Pool interface to bound concurrency using a Worker goroutines.
+type workerPool struct {
 	workerCount int
 	workerQueue chan chan func()
 	workers     []worker
@@ -16,8 +16,8 @@ type WorkerPool struct {
 }
 
 // NewWorkerPool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
-func NewWorkerPool(workerCount int) *WorkerPool {
-	newWorkerPool := WorkerPool{
+func NewWorkerPool(workerCount int) *workerPool {
+	newWorkerPool := workerPool{
 		workerCount: workerCount,
 	}
 
@@ -30,7 +30,11 @@ func NewWorkerPool(workerCount int) *WorkerPool {
 }
 
 // Start the Pool, otherwise it will not accept any job.
-func (w *WorkerPool) Start() {
+func (w *workerPool) Start() error {
+	if w.workerCount < 1 {
+		return ErrPoolInvalidSize
+	}
+
 	ctx := context.Background()
 
 	// Init chans and Stuff
@@ -53,13 +57,15 @@ func (w *WorkerPool) Start() {
 		// Store workers
 		w.workers = append(w.workers, worker)
 	}
+
+	return nil
 }
 
 // Stop the Pool.
 // 1- ALL Blocked/Waiting jobs will return immediately.
 // 2- All Jobs Processing will finish successfully
 // 3- Stop() WILL Block until all running jobs is done.
-func (w *WorkerPool) Stop() {
+func (w *workerPool) Stop() {
 	// Send Cancellation Signal to stop all waiting work
 	w.cancel()
 
@@ -75,7 +81,7 @@ func (w *WorkerPool) Stop() {
 // @Returns nil once the job has started.
 // @Returns ErrPoolClosed if the pool is not running.
 // @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
-func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
+func (w *workerPool) Enqueue(ctx context.Context, f func()) error {
 	select {
 	// The Job was canceled through job's context, no need to DO the work now.
 	case <-ctx.Done():
@@ -98,7 +104,7 @@ func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
 
 // TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if
 // the pool is closed or full.
-func (w *WorkerPool) TryEnqueue(f func()) bool {
+func (w *workerPool) TryEnqueue(f func()) bool {
 	select {
 	case workerReceiveChan := <-w.workerQueue:
 		select {
@@ -116,7 +122,6 @@ func (w *WorkerPool) TryEnqueue(f func()) bool {
 }
 
 // --------- WORKER --------- ///
-
 type worker struct {
 	ID      int
 	Worker  chan chan func()
@@ -127,9 +132,8 @@ func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) bool {
 	wg.Add(1)
 
 	// Send Signal that the below goroutine has started already
-	// Handles when TryEnqueue Returns FALSE if immediately called after starting the pool
-	// As the worker goroutines may still have not yet launched
-
+	//  -->	Handles when TryEnqueue Returns FALSE if immediately called after starting the pool
+	//  	As the worker goroutines may still have not yet launched
 	started := make(chan bool, 1)
 
 	go func() {
@@ -145,5 +149,6 @@ func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) bool {
 			}
 		}
 	}()
+
 	return <-started
 }
