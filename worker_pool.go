@@ -89,6 +89,7 @@ func (w *workerPool) Stop() {
 	w.status = poolClosed
 }
 
+// Resize the pool size in concurrent-safe way
 func (w *workerPool) Resize(newSize int) error {
 	if newSize < 1 {
 		return ErrPoolInvalidSize
@@ -99,7 +100,7 @@ func (w *workerPool) Resize(newSize int) error {
 
 	delta := newSize - w.workerCount
 
-	// If already pool_started live resize size.
+	// If already pool_started live resize it.
 	if w.status == poolStarted && delta != 0 {
 		if delta > 0 {
 			for i := 0; i < delta; i++ {

@@ -69,8 +69,16 @@ func (w *semaphorePool) Stop() {
 	// Send Cancellation Signal to stop all waiting work
 	w.cancel()
 
+	/*
+		// Try to Acquire the whole Semaphore ( This will block until all ACTIVE works are done )
+		_ = w.semaphore.Acquire(context.Background(), w.workerCount)
+	*/
+
 	// Try to Acquire the whole Semaphore ( This will block until all ACTIVE works are done )
-	_ = w.semaphore.Acquire(context.TODO(), w.workerCount)
+	// Acquire 1 by 1 because a bug I found when N > GOMAXPROCS -> https://github.com/cockroachdb/cockroach/issues/33554
+	for i := 0; i < w.workerCount; i++ {
+		_ = w.semaphore.Acquire(context.TODO(), 1)
+	}
 
 	// Release the Semaphore so that subsequent enqueues will not block and return ErrPoolClosed.
 	w.semaphore.Release(w.workerCount)
