@@ -54,10 +54,9 @@ func TestPool_Start(t *testing.T) {
 						t.Error("returned incorrect error type")
 					}
 					return
-				} else {
-					if Err != nil {
-						t.Errorf("Pool failed to start, Error: %s", Err)
-					}
+				}
+				if Err != nil {
+					t.Errorf("Pool failed to start, Error: %s", Err)
 				}
 
 				// Enqueue a Job

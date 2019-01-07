@@ -44,7 +44,7 @@ type Pool interface {
 }
 
 var (
-	// ErrPoolClosed Error Returned if the Pool has not pool_started yet, or was stopped.
+	// ErrPoolInvalidSize Returned if the Size of pool < 1.
 	ErrPoolInvalidSize = errors.New("pool size is invalid, pool size must be > 0")
 
 	// ErrPoolClosed Error Returned if the Pool has not pool_started yet, or was stopped.

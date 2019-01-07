@@ -3,6 +3,7 @@
 [![](https://godoc.org/github.com/SherifAbdlNaby/gpool?status.svg)](http://godoc.org/github.com/SherifAbdlNaby/gpool)
 [![Go Report Card](https://goreportcard.com/badge/github.com/SherifAbdlNaby/gpool)](https://goreportcard.com/report/github.com/SherifAbdlNaby/gpool)
 [![Build Status](https://travis-ci.org/Sherifabdlnaby/gpool.svg?branch=func)](https://travis-ci.org/Sherifabdlnaby/gpool)
+[![codecov](https://codecov.io/gh/Sherifabdlnaby/gpool/branch/func/graph/badge.svg)](https://codecov.io/gh/Sherifabdlnaby/gpool)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/SherifAbdlNaby/gpool/blob/master/LICENSE)
 
 
