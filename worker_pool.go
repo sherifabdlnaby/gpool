@@ -2,26 +2,32 @@ package gpool
 
 import (
 	"context"
+	"math"
 	"sync"
 )
 
 // workerPool is an implementation of gpool.Pool interface to bound concurrency using a Worker goroutines.
 type workerPool struct {
-	workerCount int
-	workerQueue chan chan func()
-	workers     []worker
-	wg          sync.WaitGroup
-	ctx         context.Context
-	cancel      context.CancelFunc
+	workerCount     int
+	workerPoolQueue chan *worker
+	wg              sync.WaitGroup
+	ctx             context.Context
+	cancel          context.CancelFunc
+	mu              sync.Mutex
+	status          uint8
 }
 
 // NewWorkerPool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
 func NewWorkerPool(workerCount int) *workerPool {
 	newWorkerPool := workerPool{
 		workerCount: workerCount,
+		mu:          sync.Mutex{},
+		status:      poolClosed,
 	}
 
 	// Cancel immediately - So that ErrPoolClosed will be returned by Enqueues
+	// This to check for pool_closed pool without checking 'status' and avoid redundant if condition because ctx will be
+	// checked anyway.
 	// A Not Canceled context will be assigned by Start().
 	newWorkerPool.ctx, newWorkerPool.cancel = context.WithCancel(context.TODO())
 	newWorkerPool.cancel()
@@ -35,28 +41,22 @@ func (w *workerPool) Start() error {
 		return ErrPoolInvalidSize
 	}
 
+	w.mu.Lock()
+
 	ctx := context.Background()
 
 	// Init chans and Stuff
 	w.ctx, w.cancel = context.WithCancel(ctx)
-	w.workerQueue = make(chan chan func(), w.workerCount)
-	w.workers = make([]worker, w.workerCount)
+	w.workerPoolQueue = make(chan *worker, w.workerCount)
 
-	// Spin Up Workers
+	// Add and Spin Up N Workers
 	for i := 0; i < w.workerCount; i++ {
-
-		worker := worker{
-			ID:      i,
-			Receive: make(chan func()),
-			Worker:  w.workerQueue,
-		}
-
-		// Start worker and start consuming
-		worker.Start(w.ctx, &w.wg)
-
-		// Store workers
-		w.workers = append(w.workers, worker)
+		w.addNewWorker()
 	}
+
+	w.status = poolStarted
+
+	w.mu.Unlock()
 
 	return nil
 }
@@ -66,11 +66,51 @@ func (w *workerPool) Start() error {
 // 2- All Jobs Processing will finish successfully
 // 3- Stop() WILL Block until all running jobs is done.
 func (w *workerPool) Stop() {
-	// Send Cancellation Signal to stop all waiting work
+	w.mu.Lock()
+
+	// stop every-worker
+	for i := 0; i < w.workerCount; i++ {
+		w.removeWorker()
+	}
+
+	// send cancellation signal ( to unblock blocked enqueues )
 	w.cancel()
 
 	// Wait for All Active working Jobs to end.
 	w.wg.Wait()
+
+	w.mu.Unlock()
+}
+
+func (w *workerPool) Resize(newSize int) error {
+	if newSize < 1 {
+		return ErrPoolInvalidSize
+	}
+
+	// Resize
+	w.mu.Lock()
+
+	delta := newSize - w.workerCount
+
+	// If already pool_started live resize size.
+	if w.status == poolStarted && delta != 0 {
+		if delta > 0 {
+			for i := 0; i < delta; i++ {
+				w.addNewWorker()
+			}
+		} else {
+			delta = int(math.Abs(float64(delta)))
+			for i := 0; i < delta; i++ {
+				w.removeWorker()
+			}
+		}
+	}
+
+	w.workerCount = newSize
+
+	w.mu.Unlock()
+
+	return nil
 }
 
 // Enqueue Process job func(){} and returns ONCE the func has pool_started (not after it ends)
@@ -81,7 +121,7 @@ func (w *workerPool) Stop() {
 // @Returns nil once the job has pool_started.
 // @Returns ErrPoolClosed if the pool is not running.
 // @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
-func (w *workerPool) Enqueue(ctx context.Context, f func()) error {
+func (w *workerPool) Enqueue(ctx context.Context, job func()) error {
 	select {
 	// The Job was canceled through job's context, no need to DO the work now.
 	case <-ctx.Done():
@@ -89,16 +129,9 @@ func (w *workerPool) Enqueue(ctx context.Context, f func()) error {
 	// Pool Cancellation Signal.
 	case <-w.ctx.Done():
 		return ErrPoolClosed
-	case workerReceiveChan := <-w.workerQueue:
-		select {
-		// Send the job to worker.
-		case workerReceiveChan <- f:
-			return nil
-		// This is in-case the worker has been stopped (via cancellation signal) BEFORE we send the job to it,
-		// Hence it won't receive the job on workerReceiveChan and will block.
-		default:
-			return ErrPoolClosed
-		}
+	case workerReceiveChan := <-w.workerPoolQueue:
+		workerReceiveChan.receive <- job
+		return nil
 	}
 }
 
@@ -106,29 +139,56 @@ func (w *workerPool) Enqueue(ctx context.Context, f func()) error {
 // the pool is pool_closed or full.
 func (w *workerPool) TryEnqueue(f func()) bool {
 	select {
-	case workerReceiveChan := <-w.workerQueue:
-		select {
-		// Send the job to worker.
-		case workerReceiveChan <- f:
-			return true
-		// This is in-case the worker has been stopped (via cancellation signal) BEFORE we send the job to it,
-		// Hence it won't receive the job and would block.
-		default:
-			return false
-		}
+	case workerReceiveChan := <-w.workerPoolQueue:
+		workerReceiveChan.receive <- f
+		return true
 	default:
 		return false
 	}
 }
 
-// --------- WORKER --------- ///
-type worker struct {
-	ID      int
-	Worker  chan chan func()
-	Receive chan func()
+// GetSize return the current size of the pool.
+func (w *workerPool) GetSize() int {
+	return w.workerCount
 }
 
-func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) bool {
+func (w *workerPool) addNewWorker() {
+	worker := worker{
+		receive:    make(chan func()),
+		workerPool: w.workerPoolQueue,
+	}
+	worker.ctx, worker.cancel = context.WithCancel(w.ctx)
+
+	// Start worker and start consuming
+	worker.Start(&w.wg)
+}
+
+func (w *workerPool) removeWorker() {
+	// Pick worker from pool
+	worker := <-w.workerPoolQueue
+
+	// Cancel that particular worker
+	worker.cancel()
+
+	// Send a dummy job
+	// Workers ONLY check if they're canceled when they're putting themselves in the ready pool.
+	// Since we picked a worker from the pool, it is expecting a job before checking if they're canceled or not.
+	// That's a better alternative than nested checking for same ctx in worker loop ? //TODO.
+	worker.receive <- func() {}
+
+	return
+}
+
+// --------- WORKER --------- ///
+
+type worker struct {
+	workerPool chan *worker
+	receive    chan func()
+	ctx        context.Context
+	cancel     context.CancelFunc
+}
+
+func (w *worker) Start(wg *sync.WaitGroup) bool {
 	wg.Add(1)
 
 	// Send Signal that the below goroutine has pool_started already
@@ -140,12 +200,15 @@ func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) bool {
 		defer wg.Done()
 		started <- true
 		for {
-			w.Worker <- w.Receive
 			select {
-			case task := <-w.Receive:
-				task()
-			case <-ctx.Done():
+			// If Worker Canceled or Pool Canceled
+			case <-w.ctx.Done():
 				return
+			default:
+				// Add self to ready-pool
+				w.workerPool <- w
+				task := <-w.receive
+				task()
 			}
 		}
 	}()
