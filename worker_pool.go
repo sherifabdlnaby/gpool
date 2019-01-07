@@ -37,11 +37,16 @@ func NewWorkerPool(workerCount int) *workerPool {
 
 // Start the Pool, otherwise it will not accept any job.
 func (w *workerPool) Start() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if w.workerCount < 1 {
 		return ErrPoolInvalidSize
 	}
 
-	w.mu.Lock()
+	if w.status == poolStarted {
+		return nil
+	}
 
 	ctx := context.Background()
 
@@ -56,8 +61,6 @@ func (w *workerPool) Start() error {
 
 	w.status = poolStarted
 
-	w.mu.Unlock()
-
 	return nil
 }
 
@@ -67,7 +70,11 @@ func (w *workerPool) Start() error {
 // 3- Stop() WILL Block until all running jobs is done.
 func (w *workerPool) Stop() {
 	w.mu.Lock()
+	defer w.mu.Unlock()
 
+	if w.status == poolClosed {
+		return
+	}
 	// stop every-worker
 	for i := 0; i < w.workerCount; i++ {
 		w.removeWorker()
@@ -79,7 +86,7 @@ func (w *workerPool) Stop() {
 	// Wait for All Active working Jobs to end.
 	w.wg.Wait()
 
-	w.mu.Unlock()
+	w.status = poolClosed
 }
 
 func (w *workerPool) Resize(newSize int) error {

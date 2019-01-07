@@ -12,12 +12,14 @@ import (
 //		3- The Pool is pool_closed by pool.Stop().
 type Pool interface {
 	// Start the Pool, otherwise it will not accept any job.
+	// Subsequent Calls to Start will have no effect unless stop() is called.
 	Start() error
 
 	// Stop the Pool.
 	//	1- ALL Blocked/Waiting jobs will return immediately.
 	//	2- All Jobs Processing will finish successfully
 	//	3- Stop() WILL Block until all running jobs is done.
+	// Subsequent Calls to Stop() will have no effect unless start() is called.
 	Stop()
 
 	// Resize the pool size in concurrent-safe way
@@ -36,6 +38,9 @@ type Pool interface {
 	// TryEnqueue will not block if the pool is full, will return true once the job has pool_started processing or false if
 	// the pool is pool_closed or full.
 	TryEnqueue(func()) bool
+
+	// GetSize return the current size of the pool.
+	GetSize() int
 }
 
 var (
@@ -43,13 +48,13 @@ var (
 	ErrPoolInvalidSize = errors.New("pool size is invalid, pool size must be > 0")
 
 	// ErrPoolClosed Error Returned if the Pool has not pool_started yet, or was stopped.
-	ErrPoolClosed = errors.New("pool is pool_closed")
+	ErrPoolClosed = errors.New("pool is closed")
 
 	// ErrJobCanceled Error Returned if the job's context was canceled while blocking waiting for the pool.
 	ErrJobCanceled = errors.New("job canceled")
 )
 
 const (
-	pool_closed = iota
-	pool_started
+	poolClosed = iota
+	poolStarted
 )

@@ -22,7 +22,7 @@ func NewSemaphorePool(size int) *semaphorePool {
 		workerCount: size,
 		semaphore:   semaphore.New(1),
 		mu:          sync.Mutex{},
-		status:      pool_closed,
+		status:      poolClosed,
 	}
 
 	// Cancel immediately - So that ErrPoolClosed will be returned by Enqueues
@@ -37,15 +37,20 @@ func NewSemaphorePool(size int) *semaphorePool {
 
 // Start the Pool, otherwise it will not accept any job.
 func (w *semaphorePool) Start() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if w.workerCount < 1 {
 		return ErrPoolInvalidSize
 	}
-	w.mu.Lock()
-	w.status = pool_started
+	if w.status == poolStarted {
+		return nil
+	}
+	w.status = poolStarted
 	ctx := context.Background()
 	w.ctx, w.cancel = context.WithCancel(ctx)
 	w.semaphore = semaphore.New(w.workerCount)
-	w.mu.Unlock()
+
 	return nil
 }
 
@@ -55,6 +60,11 @@ func (w *semaphorePool) Start() error {
 // 3- Stop() WILL Block until all running jobs is done.
 func (w *semaphorePool) Stop() {
 	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.status == poolClosed {
+		return
+	}
 
 	// Send Cancellation Signal to stop all waiting work
 	w.cancel()
@@ -65,9 +75,7 @@ func (w *semaphorePool) Stop() {
 	// Release the Semaphore so that subsequent enqueues will not block and return ErrPoolClosed.
 	w.semaphore.Release(w.workerCount)
 
-	w.status = pool_closed
-
-	w.mu.Unlock()
+	w.status = poolClosed
 
 	return
 }
@@ -84,7 +92,7 @@ func (w *semaphorePool) Resize(newSize int) error {
 	w.workerCount = newSize
 
 	// If already pool_started live resize semaphore limit.
-	if w.status == pool_started {
+	if w.status == poolStarted {
 		w.semaphore.SetLimit(newSize)
 	}
 
@@ -155,4 +163,9 @@ func (w *semaphorePool) TryEnqueue(job func()) bool {
 	}()
 
 	return true
+}
+
+// GetSize return the current size of the pool.
+func (w *semaphorePool) GetSize() int {
+	return w.workerCount
 }
