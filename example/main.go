@@ -21,8 +21,7 @@ func main() {
 
 	workerPool.Start()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, _ := context.WithCancel(context.Background())
 
 	go func() {
 		for i := 0; i < 10; i++ {
@@ -43,9 +42,9 @@ func main() {
 				if err != nil {
 					log.Printf("Job [%v] was not enqueued. [%s]", i, err.Error())
 					return
+				} else {
+					log.Printf("Job [%v] Enqueue-ed ", i)
 				}
-
-				log.Printf("Job [%v] Enqueue-ed ", i)
 
 				log.Printf("Job [%v] Receieved [%v]", i, <-x)
 			}(i)

@@ -89,8 +89,8 @@ func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
 		case workerReceiveChan <- f:
 			return nil
 		// This is in-case the worker has been stopped (via cancellation signal) BEFORE we send the job to it,
-		// Hence it won't receive the job and will block.
-		case <-w.ctx.Done():
+		// Hence it won't receive the job on workerReceiveChan and will block.
+		default:
 			return ErrPoolClosed
 		}
 	}
@@ -100,7 +100,6 @@ func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
 // the pool is closed or full.
 func (w *WorkerPool) TryEnqueue(f func()) bool {
 	select {
-
 	case workerReceiveChan := <-w.workerQueue:
 		select {
 		// Send the job to worker.
@@ -108,7 +107,7 @@ func (w *WorkerPool) TryEnqueue(f func()) bool {
 			return true
 		// This is in-case the worker has been stopped (via cancellation signal) BEFORE we send the job to it,
 		// Hence it won't receive the job and would block.
-		case <-w.ctx.Done():
+		default:
 			return false
 		}
 	default:

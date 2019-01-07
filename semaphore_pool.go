@@ -107,24 +107,18 @@ func (w *SemaphorePool) TryEnqueue(job func()) bool {
 		return false
 	}
 
-	select {
-	// Pool Cancellation Signal
-	case <-w.ctx.Done():
-		w.semaphore.Release(1)
-		return false
-	default:
-		go func() {
-			defer func() {
-				w.semaphore.Release(1)
-				/*
-					if r := recover(); r != nil {
-					fmt.Println("Recovered in a job", r)
-					}*/
-			}()
-			// Run the Function
-			job()
+	// Start Job
+	go func() {
+		defer func() {
+			w.semaphore.Release(1)
+			/*
+				if r := recover(); r != nil {
+				fmt.Println("Recovered in a job", r)
+				}*/
 		}()
-	}
+		// Run the Function
+		job()
+	}()
 
 	return true
 }
