@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 )
 
 var implementations = []struct {
 	name string
 	new  func(workerCount int) interface{}
 }{
+	{name: "Semaphore", new: func(i int) interface{} {
+		return NewSemaphorePool(i)
+	}},
 	{name: "Workerpool", new: func(i int) interface{} {
 		return NewWorkerPool(i)
-	}},
-	{name: "semaphorePool ", new: func(i int) interface{} {
-		return NewSemaphorePool(i)
 	}},
 }
 
@@ -41,6 +42,10 @@ func TestPool_Start(t *testing.T) {
 
 				/// Start Worker
 				Err = pool.Start()
+
+				// Test subsequent Calls to Start too
+				_ = pool.Start()
+
 				if size <= 0 {
 					if Err == nil {
 						t.Errorf("Pool of invalid size should return error when starting")
@@ -76,6 +81,9 @@ func TestPool_Stop(t *testing.T) {
 
 			/// Start Worker
 			_ = pool.Start()
+			pool.Stop()
+
+			// test subsequent calls to Stop()
 			pool.Stop()
 
 			x := make(chan int)
@@ -124,7 +132,6 @@ func TestPool_Restart(t *testing.T) {
 }
 
 func TestPool_Enqueue(t *testing.T) {
-
 	for _, implementation := range implementations {
 
 		pool := implementation.new(2).(Pool)
@@ -152,7 +159,7 @@ func TestPool_Enqueue(t *testing.T) {
 	}
 }
 
-func TestPool_PoolBlocking(t *testing.T) {
+func TestPool_EnqueueBlocking(t *testing.T) {
 
 	for _, implementation := range implementations {
 
@@ -276,13 +283,181 @@ func TestPool_TryEnqueue(t *testing.T) {
 	}
 }
 
+func TestPool_GetSize(t *testing.T) {
+	for _, implementation := range implementations {
+		t.Run(implementation.name, func(t *testing.T) {
+			size := 10
+			pool := implementation.new(size).(Pool)
+			_ = pool.Start()
+			if pool.GetSize() != size {
+				t.Errorf("GetSize() returned incorrect size")
+			}
+
+			size = 5
+			_ = pool.Resize(size)
+			if pool.GetSize() != size {
+				t.Errorf("GetSize() returned incorrect size")
+			}
+
+			size = 15
+			_ = pool.Resize(size)
+			if pool.GetSize() != size {
+				t.Errorf("GetSize() returned incorrect size")
+			}
+		})
+	}
+}
+
+func TestPool_Resize(t *testing.T) {
+	for _, implementation := range implementations {
+		t.Run(implementation.name, func(t *testing.T) {
+			size := 10
+			pool := implementation.new(size).(Pool)
+
+			// resize to new size
+			size = 0
+			err := pool.Resize(size)
+			if err == nil {
+				t.Errorf("Resize to invalid size didn't return error!")
+			}
+			if err != ErrPoolInvalidSize {
+				t.Errorf("Resize to invalid size returned wrong error!")
+			}
+
+			size = 15
+			err = pool.Resize(size)
+			if err != nil {
+				t.Errorf("Resize failed error: %v", err.Error())
+			}
+
+			_ = pool.Start()
+
+			if pool.GetSize() != size {
+				t.Errorf("resize didn't return correct size")
+			}
+		})
+	}
+}
+
+func TestPool_PositiveResizeLive(t *testing.T) {
+	for _, implementation := range implementations {
+		t.Run(implementation.name, func(t *testing.T) {
+			size := 2
+			pool := implementation.new(size).(Pool)
+			_ = pool.Start()
+
+			// Create Context
+			ctx := context.TODO()
+
+			/// TEST BLOCKING WHEN POOL IS FULL
+			a := make(chan int)
+			b := make(chan int)
+			c := make(chan int)
+
+			/// SEND 3 JOBS (  TWO TO FILL THE POOL, A ONE TO BE CANCELED BY CTX, AND ONE TO WAIT THE FIRST TWO )
+
+			// Two Jobs
+			_ = pool.Enqueue(ctx, func() { a <- 123 })
+			_ = pool.Enqueue(ctx, func() { b <- 123 })
+
+			// Send a job that will block
+			go func() {
+				_ = pool.Enqueue(ctx, func() { c <- 123 })
+			}()
+
+			select {
+			case <-c:
+				t.Error("Job Finished BEFORE jobs that should have been blocking this job.")
+			default:
+				// job C is blocked, now resize should unblock it.
+				_ = pool.Resize(pool.GetSize() + 1)
+
+				select {
+				case <-c:
+				// Give some time for the job to be picked.
+				case <-time.After(500 * time.Millisecond):
+					t.Error("Job Blocked after resize.")
+				}
+			}
+
+			<-a
+			<-b
+		})
+	}
+}
+
+func TestPool_NegativeResizeLive(t *testing.T) {
+	for _, implementation := range implementations {
+		t.Run(implementation.name, func(t *testing.T) {
+			size := 3
+			pool := implementation.new(size).(Pool)
+			_ = pool.Start()
+
+			// Create Context
+			ctx := context.TODO()
+
+			/// TEST BLOCKING WHEN POOL IS FULL
+			a := make(chan int)
+			b := make(chan int)
+			c := make(chan int)
+
+			/// SEND 3 JOBS
+			// Two Jobs
+			_ = pool.Enqueue(ctx, func() { a <- 123 })
+			_ = pool.Enqueue(ctx, func() { b <- 123 })
+
+			_ = pool.Resize(pool.GetSize() - 1)
+
+			// Now this should block
+			go func() {
+				_ = pool.Enqueue(ctx, func() { c <- 123 })
+			}()
+
+			select {
+			case <-c:
+				t.Error("Job Finished BEFORE jobs that should have been blocking this job.")
+			default:
+
+			}
+
+			// Get all results.
+			<-a
+			<-b
+			<-c
+		})
+	}
+}
+
 // --------------------------------------
 
 // ------------ Benchmarking ------------
 
-func BenchmarkOneJob(b *testing.B) {
+func BenchmarkOneThroughput(b *testing.B) {
 	var workersCountValues = []int{10, 100, 1000, 10000}
+	for _, implementation := range implementations {
+		for _, workercount := range workersCountValues {
+			b.Run(fmt.Sprintf("[%s]S[%d]", implementation.name, workercount), func(b *testing.B) {
+				pool := implementation.new(workercount).(Pool)
 
+				_ = pool.Start()
+
+				b.ResetTimer()
+				b.StartTimer()
+
+				for i2 := 0; i2 < b.N; i2++ {
+					_ = pool.Enqueue(context.TODO(), func() {
+					})
+				}
+
+				b.StopTimer()
+				pool.Stop()
+			})
+		}
+	}
+}
+
+func BenchmarkOneJobSync(b *testing.B) {
+	var workersCountValues = []int{10, 100, 1000, 10000}
 	for _, implementation := range implementations {
 		for _, workercount := range workersCountValues {
 			b.Run(fmt.Sprintf("[%s]S[%d]", implementation.name, workercount), func(b *testing.B) {
@@ -292,8 +467,8 @@ func BenchmarkOneJob(b *testing.B) {
 
 				b.ResetTimer()
 
+				resultChan := make(chan int, 1)
 				for i2 := 0; i2 < b.N; i2++ {
-					resultChan := make(chan int, 1)
 					_ = pool.Enqueue(context.TODO(), func() {
 						resultChan <- 123
 					})
@@ -307,12 +482,12 @@ func BenchmarkOneJob(b *testing.B) {
 	}
 }
 
-func BenchmarkBulkJobs(b *testing.B) {
-	var workersCountValues = []int{10, 10000}
-	var workAmountValues = []int{1000, 10000, 100000}
-	for _, workercount := range workersCountValues {
-		for _, work := range workAmountValues {
-			for _, implementation := range implementations {
+func BenchmarkBulkJobs_UnderLimit(b *testing.B) {
+	var workersCountValues = []int{10000}
+	var workAmountValues = []int{100, 1000, 10000}
+	for _, implementation := range implementations {
+		for _, workercount := range workersCountValues {
+			for _, work := range workAmountValues {
 				b.Run(fmt.Sprintf("[%s]S[%d]J[%d]", implementation.name, workercount, work), func(b *testing.B) {
 					pool := implementation.new(workercount).(Pool)
 					_ = pool.Start()
@@ -323,11 +498,38 @@ func BenchmarkBulkJobs(b *testing.B) {
 						wg.Add(work)
 						for i3 := 0; i3 < work; i3++ {
 							go func() {
-								resultChan := make(chan int, 1)
-								_ = pool.Enqueue(context.TODO(), func() {
-									resultChan <- 123
-								})
-								<-resultChan
+								_ = pool.Enqueue(context.TODO(), func() {})
+								wg.Done()
+							}()
+						}
+						wg.Wait()
+					}
+
+					b.StopTimer()
+					pool.Stop()
+				})
+			}
+		}
+	}
+}
+
+func BenchmarkBulkJobs_OverLimit(b *testing.B) {
+	var workersCountValues = []int{100, 1000}
+	var workAmountValues = []int{1000, 10000}
+	for _, implementation := range implementations {
+		for _, workercount := range workersCountValues {
+			for _, work := range workAmountValues {
+				b.Run(fmt.Sprintf("[%s]S[%d]J[%d]", implementation.name, workercount, work), func(b *testing.B) {
+					pool := implementation.new(workercount).(Pool)
+					_ = pool.Start()
+					b.ResetTimer()
+
+					for i2 := 0; i2 < b.N; i2++ {
+						wg := sync.WaitGroup{}
+						wg.Add(work)
+						for i3 := 0; i3 < work; i3++ {
+							go func() {
+								_ = pool.Enqueue(context.TODO(), func() {})
 								wg.Done()
 							}()
 						}
