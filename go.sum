@@ -1,2 +1,2 @@
-golang.org/x/sync v0.0.0-20181108010431-42b317875d0f h1:Bl/8QSvNqXvPGPGXa2z5xUTmV7VDcZyvRZ+QQXkXTZQ=
-golang.org/x/sync v0.0.0-20181108010431-42b317875d0f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+github.com/marusama/semaphore v0.0.0-20181027083059-edd5217b5829 h1:zyFWf1/F3eiNG0xM5lz83P6F6NNp8aUALaq/wg2pNRk=
+github.com/marusama/semaphore v0.0.0-20181027083059-edd5217b5829/go.mod h1:TmeOqAKoDinfPfSohs14CO3VcEf7o+Bem6JiNe05yrQ=

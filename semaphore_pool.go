@@ -2,22 +2,22 @@ package gpool
 
 import (
 	"context"
-	"golang.org/x/sync/semaphore"
+	"github.com/marusama/semaphore"
 )
 
-// SemaphorePool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
-type SemaphorePool struct {
-	WorkerCount int
-	semaphore   semaphore.Weighted
+// semaphorePool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
+type semaphorePool struct {
+	workerCount int
+	semaphore   semaphore.Semaphore
 	ctx         context.Context
 	cancel      context.CancelFunc
 }
 
-// NewSemaphorePool is SemaphorePool Constructor
-func NewSemaphorePool(workerCount int) *SemaphorePool {
-	newWorkerPool := SemaphorePool{
-		WorkerCount: workerCount,
-		semaphore:   *semaphore.NewWeighted(1),
+// NewSemaphorePool is semaphorePool Constructor
+func NewSemaphorePool(size int) *semaphorePool {
+	newWorkerPool := semaphorePool{
+		workerCount: size,
+		semaphore:   semaphore.New(1),
 	}
 
 	// Cancel immediately - So that ErrPoolClosed will be returned by Enqueues
@@ -29,32 +29,29 @@ func NewSemaphorePool(workerCount int) *SemaphorePool {
 }
 
 // Start the Pool, otherwise it will not accept any job.
-func (w *SemaphorePool) Start() {
+func (w *semaphorePool) Start() error {
+	if w.workerCount < 1 {
+		return ErrPoolInvalidSize
+	}
 	ctx := context.Background()
 	w.ctx, w.cancel = context.WithCancel(ctx)
-	w.semaphore = *semaphore.NewWeighted(int64(w.WorkerCount))
-	return
+	w.semaphore = semaphore.New(w.workerCount)
+	return nil
 }
 
 // Stop the Pool.
 // 1- ALL Blocked/Waiting jobs will return immediately.
 // 2- All Jobs Processing will finish successfully
 // 3- Stop() WILL Block until all running jobs is done.
-func (w *SemaphorePool) Stop() {
+func (w *semaphorePool) Stop() {
 	// Send Cancellation Signal to stop all waiting work
 	w.cancel()
 
 	// Try to Acquire the whole Semaphore ( This will block until all ACTIVE works are done )
-	_ = w.semaphore.Acquire(context.TODO(), int64(w.WorkerCount))
+	_ = w.semaphore.Acquire(context.TODO(), w.workerCount)
 
 	// Release the Semaphore so that subsequent enqueues will not block and return ErrPoolClosed.
-	w.semaphore.Release(int64(w.WorkerCount))
-
-	// This to give a breathing space for Enqueue to not wait for a Semaphore of 0 size.
-	// so that Enqueue won't block ( will still send ErrPoolClosed, no job will run )
-	if w.WorkerCount == 0 {
-		w.semaphore = *semaphore.NewWeighted(1)
-	}
+	w.semaphore.Release(w.workerCount)
 
 	return
 }
@@ -67,7 +64,7 @@ func (w *SemaphorePool) Stop() {
 // @Returns nil once the job has started.
 // @Returns ErrPoolClosed if the pool is not running.
 // @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
-func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
+func (w *semaphorePool) Enqueue(ctx context.Context, job func()) error {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	err := w.semaphore.Acquire(ctx, 1)
 
@@ -91,7 +88,7 @@ func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
 					}*/
 			}()
 
-			// Run the Function
+			// Run the job
 			job()
 		}()
 	}
@@ -101,7 +98,7 @@ func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
 
 // TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if
 // the pool is closed or full.
-func (w *SemaphorePool) TryEnqueue(job func()) bool {
+func (w *semaphorePool) TryEnqueue(job func()) bool {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	if !w.semaphore.TryAcquire(1) {
 		return false
