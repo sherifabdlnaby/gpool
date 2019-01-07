@@ -73,12 +73,12 @@ func (w *workerPool) Stop() {
 	w.wg.Wait()
 }
 
-// Enqueue Process job func(){} and returns ONCE the func has started (not after it ends)
+// Enqueue Process job func(){} and returns ONCE the func has pool_started (not after it ends)
 // If the pool is full pool.Enqueue() will block until either:
 // 		1- A worker/slot in the pool is done and is ready to take another job.
 //		2- The Job context is canceled.
-//		3- The Pool is closed by pool.Stop().
-// @Returns nil once the job has started.
+//		3- The Pool is pool_closed by pool.Stop().
+// @Returns nil once the job has pool_started.
 // @Returns ErrPoolClosed if the pool is not running.
 // @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
 func (w *workerPool) Enqueue(ctx context.Context, f func()) error {
@@ -102,8 +102,8 @@ func (w *workerPool) Enqueue(ctx context.Context, f func()) error {
 	}
 }
 
-// TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if
-// the pool is closed or full.
+// TryEnqueue will not block if the pool is full, will return true once the job has pool_started processing or false if
+// the pool is pool_closed or full.
 func (w *workerPool) TryEnqueue(f func()) bool {
 	select {
 	case workerReceiveChan := <-w.workerQueue:
@@ -131,7 +131,7 @@ type worker struct {
 func (w *worker) Start(ctx context.Context, wg *sync.WaitGroup) bool {
 	wg.Add(1)
 
-	// Send Signal that the below goroutine has started already
+	// Send Signal that the below goroutine has pool_started already
 	//  -->	Handles when TryEnqueue Returns FALSE if immediately called after starting the pool
 	//  	As the worker goroutines may still have not yet launched
 	started := make(chan bool, 1)

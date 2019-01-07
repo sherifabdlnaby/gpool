@@ -106,7 +106,7 @@ func TestPool_Restart(t *testing.T) {
 			/// Restarting the Pool
 			pool.Stop()
 
-			/// Send Work to closed Pool
+			/// Send Work to pool_closed Pool
 			Err := pool.Enqueue(context.TODO(), func() {})
 			if Err == nil {
 				t.Error("Enqueued a job on a stopped pool.")
@@ -140,7 +140,7 @@ func TestPool_Enqueue(t *testing.T) {
 			})
 
 			if Err != nil {
-				t.Errorf("Error returned in a started and free pool. Error: %s", Err.Error())
+				t.Errorf("Error returned in a pool_started and free pool. Error: %s", Err.Error())
 			}
 
 			result := <-x
