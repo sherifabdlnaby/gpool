@@ -74,12 +74,12 @@ func (w *WorkerPool) Stop() {
 //		3- The Pool is closed by pool.Stop().
 // @Returns nil once the job has started.
 // @Returns ErrPoolClosed if the pool is not running.
-// @Returns ErrJobTimeout if the job Enqueued context was canceled before the job could be processed by the pool.
+// @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
 func (w *WorkerPool) Enqueue(ctx context.Context, f func()) error {
 	select {
 	// The Job was canceled through job's context, no need to DO the work now.
 	case <-ctx.Done():
-		return ErrJobTimeout
+		return ErrJobCanceled
 	// Pool Cancellation Signal.
 	case <-w.ctx.Done():
 		return ErrPoolClosed

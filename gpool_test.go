@@ -122,8 +122,8 @@ func TestWorkerPool_Enqueue(t *testing.T) {
 			if Err3 == nil {
 				t.Error("Didn't Return Error in a waiting & canceled job")
 			}
-			if Err3 != ErrJobTimeout {
-				t.Errorf("Canceled Job Timeout returned wronge Error. Error: %s", Err3.Error())
+			if Err3 != ErrJobCanceled {
+				t.Errorf("Canceled Job returned wronge type of Error. Error: %s", Err3.Error())
 			}
 
 			for i := 0; i < 3; i++ {
@@ -148,7 +148,54 @@ func TestWorkerPool_Enqueue(t *testing.T) {
 	}
 }
 
-func TestWorkerPool_Enqueue0Worker(t *testing.T) {
+func TestPool_PoolBlocking(t *testing.T) {
+
+	for _, implementation := range implementations {
+
+		pool := implementation.new(2).(Pool)
+
+		t.Run(implementation.name, func(t *testing.T) {
+
+			// Create Context
+			ctx := context.TODO()
+
+			// Start Worker
+			pool.Start()
+
+			/// TEST BLOCKING WHEN POOL IS FULL
+			a := make(chan int)
+			b := make(chan int)
+			c := make(chan int)
+			d := make(chan int)
+
+			/// SEND 4 JOBS (  TWO TO FILL THE POOL, A ONE TO BE CANCELED BY CTX, AND ONE TO WAIT THE FIRST TWO )
+
+			// Two Jobs
+			Err1 := pool.Enqueue(ctx, func() { a <- 123 })
+			Err2 := pool.Enqueue(ctx, func() { b <- 123 })
+
+			// Enqueue a job with a canceled ctx
+			canceledCtx, cancel := context.WithCancel(context.TODO())
+			go cancel()
+			Err3 := pool.Enqueue(canceledCtx, func() { c <- 123 })
+
+			// Send a waiting Job
+			go func() {
+				_ = pool.Enqueue(ctx, func() { d <- 123 })
+			}()
+
+			if Err1 != nil {
+				t.Errorf("Returned Error and it shouldn't #1, Error: %s", Err1.Error())
+			}
+			if Err2 != nil {
+				t.Errorf("Returned Error and it shouldn't #2, Error: %s", Err2.Error())
+			}
+			if Err3 == nil {
+				t.Error("Didn't Return Error in a waiting & canceled job")
+			}
+			if Err3 != ErrJobCanceled {
+				t.Errorf("Canceled Job returned wronge type of Error. Error: %s", Err3.Error())
+			}
 
 	var implementations = []struct {
 		name string

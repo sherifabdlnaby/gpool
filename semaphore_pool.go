@@ -66,14 +66,14 @@ func (w *SemaphorePool) Stop() {
 //		3- The Pool is closed by pool.Stop().
 // @Returns nil once the job has started.
 // @Returns ErrPoolClosed if the pool is not running.
-// @Returns ErrJobTimeout if the job Enqueued context was canceled before the job could be processed by the pool.
+// @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
 func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	err := w.semaphore.Acquire(ctx, 1)
 
 	// The Job was canceled through job's context, no need to DO the work now.
 	if err != nil {
-		return ErrJobTimeout
+		return ErrJobCanceled
 	}
 
 	select {

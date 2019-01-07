@@ -27,7 +27,7 @@ type Pool interface {
 	//		3- The Pool is closed by pool.Stop().
 	// @Returns nil once the job has started.
 	// @Returns ErrPoolClosed if the pool is not running.
-	// @Returns ErrJobTimeout if the job Enqueued context was canceled before the job could be processed by the pool.
+	// @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
 	Enqueue(context.Context, func()) error
 
 	// TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if
@@ -39,6 +39,6 @@ var (
 	// ErrPoolClosed Error Returned if the Pool has not started yet, or was stopped.
 	ErrPoolClosed = errors.New("pool is closed")
 
-	// ErrJobTimeout Error Returned if the job's context was canceled while blocking waiting for the pool.
-	ErrJobTimeout = errors.New("job canceled")
+	// ErrJobCanceled Error Returned if the job's context was canceled while blocking waiting for the pool.
+	ErrJobCanceled = errors.New("job canceled")
 )
