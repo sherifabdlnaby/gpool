@@ -6,92 +6,122 @@
 [![codecov](https://codecov.io/gh/Sherifabdlnaby/gpool/branch/func/graph/badge.svg)](https://codecov.io/gh/Sherifabdlnaby/gpool)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/SherifAbdlNaby/gpool/blob/master/LICENSE)
 
-
-Easily manages a resizeable pool of context aware goroutines to bound concurrency, A `Job` is Enqueued to the pool and only `N` jobs can be processing concurrently.
-
-When you `Enqueue` a job it will return ONCE the job **starts** processing otherwise if the pool is full it will **block** until: **(1)** pool has room for the job, **(2)** job's `context` is canceled, or **(3)** the pool is stopped.
-
-Stopping the Pool using `pool.Stop()` will unblock any **blocked** enqueues and **wait** All active jobs to finish before returning.
-
-Enqueuing a Job will return error `nil` once a job starts, `gpool.ErrPoolClosed` if the pool is closed, or `gpool.ErrTimeoutJob` if the job's context is canceled while blocking waiting for the pool.
-
-The Pool can be re-sized using `Resize()` that will resize the pool in a concurrent safe-way. `Resize` can enlarge the pool so that any blocked enqueue will unblock after resize is called, in case of shrinking the pool `resize` will not affect any processing job.
-
-further documentation at : [![](https://godoc.org/github.com/SherifAbdlNaby/gpool?status.svg)](http://godoc.org/github.com/SherifAbdlNaby/gpool)
-
 ## Installation
 ``` bash
 $ go get github.com/sherifabdlnaby/gpool
 ```
+``` go
+import "github.com/sherifabdlnaby/gpool"
+```
+
+## Introduction
+
+Easily manages a resizeable pool of context aware goroutines to bound concurrency, A **`Job`** is **Enqueued** to the pool and only **`N`** jobs can be processing concurrently.
+
+- A Job is simply a `func(){}` When you `Enqueue(ctx, func(){})` a job the call will return *ONCE* the job has **started** processing. Otherwise if the pool is full it will **block** until:
+  1. pool has room for the job.
+  2. job's `context` is canceled.
+  3. the pool is stopped.
+
+
+- A Pool is either `closed` or `started`, the Pool will not accept any job unless `pool.Start()` is called.
+
+    Stopping the Pool using `pool.Stop()` it will **wait** for all processing jobs to finish before returning, it will also unblock any **blocked** job enqueues (enqueues will return ErrPoolClosed).
+
+- The Pool can be re-sized using `Resize()` that will resize the pool in a concurrent safe-way. `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is resized, in case of shrinking the pool `resize` will not affect any already processing job.
+
+- Enqueuing a Job will return error `nil` once a job starts, `ErrPoolClosed` if the pool is closed, or `ErrJobCanceled` if the job's context is canceled while blocking waiting for the pool.
+
+- `Start`, `Stop`, and `Resize(N)` is all concurrent safe and can be called from multiple goroutines, subsequent calls of Start or Stop has no effect unless called interchangeably.
+
+#### Two Implementation
+gPool has two implementation for the same Pool Interface{} and both has the same exact behavior, Implementation 1: uses workerpool pattern and 2: uses Semaphore.
+According to benchmarks below Semaphore has significantly less overhead than workerpool.
+
+further documentation at : [![](https://godoc.org/github.com/SherifAbdlNaby/gpool?status.svg)](http://godoc.org/github.com/SherifAbdlNaby/gpool)
+
+----------
 
 
 ## Examples
 
-### Example 1
+### Example 1 - Simple Job Enqueue
 ```go
-
 func main() {
   concurrency := 2
+
+  // Create and start pool.
   var pool gpool.Pool = gpool.NewSemaphorePool(concurrency)
-  pool.Start()
+  err := pool.Start()
+
+  if err != nil {
+    panic(err)
+  }
+
   defer pool.Stop()
 
-  // Send JOB
+  // Create JOB
   resultChan1 := make(chan int)
-  err1 := pool.Enqueue(context.TODO(), func() {
+  ctx := context.Background()
+  job := func() {
     time.Sleep(2000 * time.Millisecond)
     resultChan1 <- 1337
-  })
+  }
+
+  // Enqueue Job
+  err1 := pool.Enqueue(ctx, job)
+
   if err1 != nil {
     log.Printf("Job was not enqueued. Error: [%s]", err1.Error())
     return
   }
+
+  log.Printf("Job Enqueued and started processing")
 
   log.Printf("Job Done, Received: %v", <-resultChan1)
 }
 ```
 ----------
 
-### Example 2
+### Example 2 - Enqueue A Job with Timeout
 ```go
 
 func main() {
   concurrency := 2
+
+  // Create and start pool.
   var pool gpool.Pool = gpool.NewSemaphorePool(concurrency)
-  pool.Start()
+  err := pool.Start()
+
+  if err != nil {
+    panic(err)
+  }
+
   defer pool.Stop()
 
-  // Send JOB 1
-  resultChan1 := make(chan int)
-  err1 := pool.Enqueue(context.TODO(), func() {
-    time.Sleep(2000 * time.Millisecond)
-    resultChan1 <- 100
-  })
+  // Create JOB
+  resultChan := make(chan int)
+  ctx := context.Background()
+  job := func() {
+    resultChan <- 1337
+  }
+
+  // Enqueue 2 Jobs to fill pool (Will not finish unless we pull result from resultChan)
+  _ = pool.Enqueue(ctx, job)
+  _ = pool.Enqueue(ctx, job)
+
+
+  ctxWithTimeout, _ := context.WithTimeout(ctx, 1000 * time.Millisecond)
+
+  // Will block for 1 second only because of Timeout
+  err1 := pool.Enqueue(ctxWithTimeout, job)
+
   if err1 != nil {
-    log.Printf("Job [%v] was not enqueued. [%s]", 1, err1.Error())
-    return
+    log.Printf("Job was not enqueued. Error: [%s]", err1.Error())
   }
 
-  // Send JOB 2
-  resultChan2 := make(chan int)
-  err2 := pool.Enqueue(context.TODO(), func() {
-    time.Sleep(1000 * time.Millisecond)
-    resultChan2 <- 200
-  })
-  if err2 != nil {
-    log.Printf("Job [%v] was not enqueued. [%s]", 2, err2.Error())
-    return
-  }
-
-  // Recieve The Two Jobs which ever come first
-  for i := 0; i < 2; i++ {
-    select {
-    case result := <-resultChan1:
-      log.Printf("Job [%v] Done [%v]", 1, result)
-    case result := <-resultChan2:
-      log.Printf("Job [%v] Done [%v]", 2, result)
-    }
-  }
+  log.Printf("Job 1 Done, Received: %v", <-resultChan)
+  log.Printf("Job 2 Done, Received: %v", <-resultChan)
 }
 ```
 
@@ -99,23 +129,24 @@ func main() {
 
 ### Example 3
 ``` go
-// WorkerCount Number of Workers / Concurrent jobs of the Pool
-const WorkerCount = 2
+// size Workers / Concurrent jobs of the Pool
+const size = 2
 
 func main() {
-  var workerPool gpool.Pool
-
-  workerPool = gpool.NewSemaphorePool(WorkerCount)
-
+  var pool gpool.Pool
+  pool = gpool.NewSemaphorePool(size)
   log.Println("Starting Pool...")
+  err := pool.Start()
 
-  workerPool.Start()
+  if err != nil {
+    panic(err)
+  }
+  defer pool.Stop()
 
   ctx, cancel := context.WithCancel(context.Background())
   defer cancel()
 
   go func() {
-    log.Printf("Enqueueing 10 jobs on a seperate goroutine...")
     for i := 0; i < 10; i++ {
 
       // Small Interval for more readable output
@@ -126,7 +157,7 @@ func main() {
 
         log.Printf("Job [%v] Enqueueing", i)
 
-        err := workerPool.Enqueue(ctx, func() {
+        err := pool.Enqueue(ctx, func() {
           time.Sleep(2000 * time.Millisecond)
           x <- i
         })
@@ -138,57 +169,61 @@ func main() {
 
         log.Printf("Job [%v] Enqueue-ed ", i)
 
-        log.Printf("Job [%v] Receieved [%v]", i, <-x)
+        log.Printf("Job [%v] Receieved, Result: [%v]", i, <-x)
       }(i)
     }
   }()
 
-  // Wait 5 Secs before Stopping
+  // Uncomment to demonstrate ctx cancel of jobs.
+  //time.Sleep(100 * time.Millisecond)
+  //cancel()
+
   time.Sleep(5000 * time.Millisecond)
 
   fmt.Println("Stopping...")
 
-  workerPool.Stop()
+  pool.Stop()
 
   fmt.Println("Stopped")
 
   fmt.Println("Sleeping for couple of seconds so canceled job have a chance to print out their status")
 
-  time.Sleep(10000 * time.Millisecond)
+  time.Sleep(4000 * time.Millisecond)
 }
 ```
 #### Output
-``` 
-2018/12/16 05:37:03 Starting Pool...
-2018/12/16 05:37:03 Enqueueing 10 jobs on a seperate goroutine...
-2018/12/16 05:37:03 Job [0] Enqueueing
-2018/12/16 05:37:03 Job [0] Enqueue-ed 
-2018/12/16 05:37:04 Job [1] Enqueueing
-2018/12/16 05:37:04 Job [1] Enqueue-ed 
-2018/12/16 05:37:04 Job [2] Enqueueing
-2018/12/16 05:37:05 Job [3] Enqueueing
-2018/12/16 05:37:05 Job [2] Enqueue-ed 
-2018/12/16 05:37:05 Job [0] Receieved [0]
-2018/12/16 05:37:05 Job [4] Enqueueing
-2018/12/16 05:37:06 Job [3] Enqueue-ed 
-2018/12/16 05:37:06 Job [1] Receieved [1]
-2018/12/16 05:37:06 Job [5] Enqueueing
-2018/12/16 05:37:06 Job [6] Enqueueing
-2018/12/16 05:37:07 Job [7] Enqueueing
-2018/12/16 05:37:07 Job [4] Enqueue-ed 
-2018/12/16 05:37:07 Job [2] Receieved [2]
-2018/12/16 05:37:07 Job [8] Enqueueing
+```
+2019/01/08 20:15:38 Starting Pool...
+2019/01/08 20:15:39 Job [0] Enqueueing
+2019/01/08 20:15:39 Job [0] Enqueue-ed
+2019/01/08 20:15:39 Job [1] Enqueueing
+2019/01/08 20:15:39 Job [1] Enqueue-ed
+2019/01/08 20:15:40 Job [2] Enqueueing
+2019/01/08 20:15:40 Job [3] Enqueueing
+2019/01/08 20:15:41 Job [0] Receieved, Result: [0]
+2019/01/08 20:15:41 Job [2] Enqueue-ed
+2019/01/08 20:15:41 Job [4] Enqueueing
+2019/01/08 20:15:41 Job [3] Enqueue-ed
+2019/01/08 20:15:41 Job [1] Receieved, Result: [1]
+2019/01/08 20:15:41 Job [5] Enqueueing
+2019/01/08 20:15:42 Job [6] Enqueueing
+2019/01/08 20:15:42 Job [7] Enqueueing
+2019/01/08 20:15:43 Job [4] Enqueue-ed
+2019/01/08 20:15:43 Job [2] Receieved, Result: [2]
+2019/01/08 20:15:43 Job [8] Enqueueing
 Stopping...
-2018/12/16 05:37:08 Job [3] Receieved [3]
-2018/12/16 05:37:08 Job [5] was not enqueued. [pool is closed]
-2018/12/16 05:37:08 Job [6] was not enqueued. [pool is closed]
-2018/12/16 05:37:08 Job [8] was not enqueued. [pool is closed]
-2018/12/16 05:37:08 Job [7] was not enqueued. [pool is closed]
-2018/12/16 05:37:08 Job [9] Enqueueing
+2019/01/08 20:15:43 Job [7] was not enqueued. [pool is closed]
+2019/01/08 20:15:43 Job [5] was not enqueued. [pool is closed]
+2019/01/08 20:15:43 Job [6] was not enqueued. [pool is closed]
+2019/01/08 20:15:43 Job [3] Receieved, Result: [3]
+2019/01/08 20:15:43 Job [8] was not enqueued. [pool is closed]
+2019/01/08 20:15:43 Job [9] Enqueueing
 Stopped
-2018/12/16 05:37:09 Job [4] Receieved [4]
+2019/01/08 20:15:45 Job [4] Receieved, Result: [4]
 Sleeping for couple of seconds so canceled job have a chance to print out their status
-2018/12/16 05:37:09 Job [9] was not enqueued. [pool is closed]
+2019/01/08 20:15:45 Job [9] was not enqueued. [pool is closed]
+
+Process finished with exit code 0
 ```
 
 ---------------
