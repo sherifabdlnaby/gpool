@@ -547,8 +547,9 @@ func BenchmarkBulkJobs_OverLimit(b *testing.B) {
 // --------------------------------------
 
 // --------------EXAMPLES----------------
+
 // Example 1 - Simple Job Enqueue
-func Example_suffixThree() {
+func Example_one() {
 	concurrency := 2
 
 	// Create and start pool.
@@ -583,7 +584,7 @@ func Example_suffixThree() {
 }
 
 // Example 2 - Enqueue A Job with Timeout
-func Example_suffixTwo() {
+func Example_two() {
 	concurrency := 2
 
 	// Create and start pool.
@@ -622,7 +623,7 @@ func Example_suffixTwo() {
 }
 
 // Example 3 - Enqueue 10 Jobs and Stop pool mid-processing.
-func Example_suffixOne() {
+func Example_three() {
 	var pool Pool
 	pool = NewSemaphorePool(2)
 	log.Println("Starting Pool...")
