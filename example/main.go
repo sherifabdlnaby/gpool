@@ -8,21 +8,19 @@ import (
 	"time"
 )
 
-// WorkerCount Number of Workers / Concurrent jobs of the Pool
-const WorkerCount = 2
+// size Workers / Concurrent jobs of the Pool
+const size = 2
 
 func main() {
-	var workerPool gpool.Pool
-
-	workerPool = gpool.NewSemaphorePool(WorkerCount)
-
+	var pool gpool.Pool
+	pool = gpool.NewSemaphorePool(size)
 	log.Println("Starting Pool...")
-
-	err := workerPool.Start()
+	err := pool.Start()
 
 	if err != nil {
 		panic(err)
 	}
+	defer pool.Stop()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -38,7 +36,7 @@ func main() {
 
 				log.Printf("Job [%v] Enqueueing", i)
 
-				err := workerPool.Enqueue(ctx, func() {
+				err := pool.Enqueue(ctx, func() {
 					time.Sleep(2000 * time.Millisecond)
 					x <- i
 				})
@@ -50,7 +48,7 @@ func main() {
 
 				log.Printf("Job [%v] Enqueue-ed ", i)
 
-				log.Printf("Job [%v] Receieved [%v]", i, <-x)
+				log.Printf("Job [%v] Receieved, Result: [%v]", i, <-x)
 			}(i)
 		}
 	}()
@@ -63,11 +61,11 @@ func main() {
 
 	fmt.Println("Stopping...")
 
-	workerPool.Stop()
+	pool.Stop()
 
 	fmt.Println("Stopped")
 
 	fmt.Println("Sleeping for couple of seconds so canceled job have a chance to print out their status")
 
-	time.Sleep(10000 * time.Millisecond)
+	time.Sleep(4000 * time.Millisecond)
 }

@@ -12,20 +12,26 @@ import (
 //		3- The Pool is pool_closed by pool.Stop().
 type Pool interface {
 	// Start the Pool, otherwise it will not accept any job.
-	// Subsequent Calls to Start will have no effect unless stop() is called.
+	//
+	// Subsequent calls to Start will not have any effect unless Stop() is called. Will return ErrPoolInvalidSize
+	// If pool size is < 1.
 	Start() error
 
 	// Stop the Pool.
-	//	1- ALL Blocked/Waiting jobs will return immediately.
-	//	2- All Jobs Processing will finish successfully
-	//	3- Stop() WILL Block until all running jobs is done.
+	//
+	//		1- ALL Blocked/Waiting jobs will return immediately.
+	// 		2- All Jobs Processing will finish successfully
+	//		3- Stop() WILL Block until all running jobs is done.
 	// Subsequent Calls to Stop() will have no effect unless start() is called.
 	Stop()
 
-	// Resize the pool size in concurrent-safe way
+	// Resize the pool size in concurrent-safe way.
+	//
+	//  `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is resized, in case of shrinking the pool `resize` will not affect any already processing job.
 	Resize(int) error
 
 	// Enqueue Process job func(){} and returns ONCE the func has pool_started (not after it ends)
+	//
 	// If the pool is full pool.Enqueue() will block until either:
 	// 		1- A worker/slot in the pool is done and is ready to take another job.
 	//		2- The Job context is canceled.
@@ -35,8 +41,7 @@ type Pool interface {
 	// @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
 	Enqueue(context.Context, func()) error
 
-	// TryEnqueue will not block if the pool is full, will return true once the job has pool_started processing or false if
-	// the pool is pool_closed or full.
+	// TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if the pool is closed or full.
 	TryEnqueue(func()) bool
 
 	// GetSize return the current size of the pool.

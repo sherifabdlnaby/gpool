@@ -3,6 +3,7 @@ package gpool
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"testing"
 	"time"
@@ -544,3 +545,138 @@ func BenchmarkBulkJobs_OverLimit(b *testing.B) {
 }
 
 // --------------------------------------
+
+// --------------EXAMPLES----------------
+// Example 1 - Simple Job Enqueue
+func Example_suffixThree() {
+	concurrency := 2
+
+	// Create and start pool.
+	var pool Pool = NewSemaphorePool(concurrency)
+	err := pool.Start()
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer pool.Stop()
+
+	// Create JOB
+	resultChan1 := make(chan int)
+	ctx := context.Background()
+	job := func() {
+		time.Sleep(2000 * time.Millisecond)
+		resultChan1 <- 1337
+	}
+
+	// Enqueue Job
+	err1 := pool.Enqueue(ctx, job)
+
+	if err1 != nil {
+		log.Printf("Job was not enqueued. Error: [%s]", err1.Error())
+		return
+	}
+
+	log.Printf("Job Enqueued and started processing")
+
+	log.Printf("Job Done, Received: %v", <-resultChan1)
+}
+
+// Example 2 - Enqueue A Job with Timeout
+func Example_suffixTwo() {
+	concurrency := 2
+
+	// Create and start pool.
+	var pool Pool = NewSemaphorePool(concurrency)
+	err := pool.Start()
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer pool.Stop()
+
+	// Create JOB
+	resultChan := make(chan int)
+	ctx := context.Background()
+	job := func() {
+		resultChan <- 1337
+	}
+
+	// Enqueue 2 Jobs to fill pool (Will not finish unless we pull result from resultChan)
+	_ = pool.Enqueue(ctx, job)
+	_ = pool.Enqueue(ctx, job)
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 1000*time.Millisecond)
+	defer cancel()
+
+	// Will block for 1 second only because of Timeout
+	err1 := pool.Enqueue(ctxWithTimeout, job)
+
+	if err1 != nil {
+		log.Printf("Job was not enqueued. Error: [%s]", err1.Error())
+	}
+
+	log.Printf("Job 1 Done, Received: %v", <-resultChan)
+	log.Printf("Job 2 Done, Received: %v", <-resultChan)
+}
+
+// Example 3 - Enqueue 10 Jobs and Stop pool mid-processing.
+func Example_suffixOne() {
+	var pool Pool
+	pool = NewSemaphorePool(2)
+	log.Println("Starting Pool...")
+	err := pool.Start()
+
+	if err != nil {
+		panic(err)
+	}
+	defer pool.Stop()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		for i := 0; i < 10; i++ {
+
+			// Small Interval for more readable output
+			time.Sleep(500 * time.Millisecond)
+
+			go func(i int) {
+				x := make(chan int, 1)
+
+				log.Printf("Job [%v] Enqueueing", i)
+
+				err := pool.Enqueue(ctx, func() {
+					time.Sleep(2000 * time.Millisecond)
+					x <- i
+				})
+
+				if err != nil {
+					log.Printf("Job [%v] was not enqueued. [%s]", i, err.Error())
+					return
+				}
+
+				log.Printf("Job [%v] Enqueue-ed ", i)
+
+				log.Printf("Job [%v] Receieved, Result: [%v]", i, <-x)
+			}(i)
+		}
+	}()
+
+	// Uncomment to demonstrate ctx cancel of jobs.
+	//time.Sleep(100 * time.Millisecond)
+	//cancel()
+
+	time.Sleep(5000 * time.Millisecond)
+
+	fmt.Println("Stopping...")
+
+	pool.Stop()
+
+	fmt.Println("Stopped")
+
+	fmt.Println("Sleeping for couple of seconds so canceled job have a chance to print out their status")
+
+	time.Sleep(4000 * time.Millisecond)
+}
