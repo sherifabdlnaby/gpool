@@ -11,24 +11,35 @@ import (
 
 var implementations = []struct {
 	name string
-	new  func(workerCount int) interface{}
+	new  func(int) (Pool, error)
 }{
-	{name: "Semaphore", new: func(i int) interface{} {
-		return NewSemaphorePool(i)
-	}},
-	{name: "Workerpool", new: func(i int) interface{} {
-		return NewWorkerPool(i)
-	}},
+	{name: "Semaphore", new: NewSemaphorePool},
+	{name: "Workerpool", new: NewWorkerPool},
 }
 
 // -------------- Testing --------------
 
 func TestPool_Start(t *testing.T) {
 	for _, implementation := range implementations {
-		// Test both  < 0, 0 and > 0 size.
-		for size := -1; size <= 1; size++ {
+		// Test sizes for  < 0, 0 and > 0 size.
+		for size := -1; size <= 2; size++ {
 			t.Run(fmt.Sprintf("%sS[%d]", implementation.name, size), func(t *testing.T) {
-				pool := implementation.new(size).(Pool)
+				pool, err := implementation.new(size)
+
+				if size < 1 && err == nil {
+					t.Errorf("pool construction succeded with invalid size")
+				}
+
+				if size < 1 && err != nil {
+					if err != ErrPoolInvalidSize {
+						t.Errorf("pool construction failed but returned incorrect error")
+					}
+					return
+				}
+
+				if size >= 1 && err != nil {
+					t.Errorf("pool construction failed, error: %s", err)
+				}
 
 				/// Send Work before Worker Start
 				Err := pool.Enqueue(context.TODO(), func() {})
@@ -41,24 +52,11 @@ func TestPool_Start(t *testing.T) {
 					t.Error("Pool Sent an incorrect error type")
 				}
 
-				/// Start Worker
-				Err = pool.Start()
+				/// Start Pool
+				pool.Start()
 
 				// Test subsequent Calls to Start too
-				_ = pool.Start()
-
-				if size <= 0 {
-					if Err == nil {
-						t.Errorf("Pool of invalid size should return error when starting")
-					}
-					if Err != ErrPoolInvalidSize {
-						t.Error("returned incorrect error type")
-					}
-					return
-				}
-				if Err != nil {
-					t.Errorf("Pool failed to start, Error: %s", Err)
-				}
+				pool.Start()
 
 				// Enqueue a Job
 				Err = pool.Enqueue(context.TODO(), func() {})
@@ -75,12 +73,12 @@ func TestPool_Stop(t *testing.T) {
 
 	for _, implementation := range implementations {
 
-		pool := implementation.new(10).(Pool)
+		pool, _ := implementation.new(10)
 
 		t.Run(implementation.name, func(t *testing.T) {
 
 			/// Start Worker
-			_ = pool.Start()
+			pool.Start()
 			pool.Stop()
 
 			// test subsequent calls to Stop()
@@ -105,11 +103,11 @@ func TestPool_Restart(t *testing.T) {
 
 	for _, implementation := range implementations {
 
-		pool := implementation.new(1).(Pool)
+		pool, _ := implementation.new(1)
 
 		t.Run(implementation.name, func(t *testing.T) {
 			/// Start Worker
-			_ = pool.Start()
+			pool.Start()
 
 			/// Restarting the Pool
 			pool.Stop()
@@ -120,7 +118,7 @@ func TestPool_Restart(t *testing.T) {
 				t.Error("Enqueued a job on a stopped pool.")
 			}
 
-			_ = pool.Start()
+			pool.Start()
 
 			/// Send Work to pool that has been restarted.
 			Err = pool.Enqueue(context.TODO(), func() {})
@@ -134,11 +132,11 @@ func TestPool_Restart(t *testing.T) {
 func TestPool_Enqueue(t *testing.T) {
 	for _, implementation := range implementations {
 
-		pool := implementation.new(2).(Pool)
+		pool, _ := implementation.new(2)
 
 		t.Run(implementation.name, func(t *testing.T) {
 			// Start Worker
-			_ = pool.Start()
+			pool.Start()
 
 			// Enqueue a Job
 			x := make(chan int, 1)
@@ -163,7 +161,7 @@ func TestPool_EnqueueBlocking(t *testing.T) {
 
 	for _, implementation := range implementations {
 
-		pool := implementation.new(2).(Pool)
+		pool, _ := implementation.new(2)
 
 		t.Run(implementation.name, func(t *testing.T) {
 
@@ -171,7 +169,7 @@ func TestPool_EnqueueBlocking(t *testing.T) {
 			ctx := context.TODO()
 
 			// Start Worker
-			_ = pool.Start()
+			pool.Start()
 
 			/// TEST BLOCKING WHEN POOL IS FULL
 			a := make(chan int)
@@ -236,12 +234,12 @@ func TestPool_EnqueueBlocking(t *testing.T) {
 
 func TestPool_TryEnqueue(t *testing.T) {
 	for _, implementation := range implementations {
-		pool := implementation.new(2).(Pool)
+		pool, _ := implementation.new(2)
 		t.Run(implementation.name, func(t *testing.T) {
 			x := make(chan int, 1)
 
 			/// Start Worker
-			_ = pool.Start()
+			pool.Start()
 
 			success := pool.TryEnqueue(func() {
 				x <- 123
@@ -287,8 +285,8 @@ func TestPool_GetSize(t *testing.T) {
 	for _, implementation := range implementations {
 		t.Run(implementation.name, func(t *testing.T) {
 			size := 10
-			pool := implementation.new(size).(Pool)
-			_ = pool.Start()
+			pool, _ := implementation.new(size)
+			pool.Start()
 			if pool.GetSize() != size {
 				t.Errorf("GetSize() returned incorrect size")
 			}
@@ -312,7 +310,7 @@ func TestPool_Resize(t *testing.T) {
 	for _, implementation := range implementations {
 		t.Run(implementation.name, func(t *testing.T) {
 			size := 10
-			pool := implementation.new(size).(Pool)
+			pool, _ := implementation.new(size)
 
 			// resize to new size
 			size = 0
@@ -330,7 +328,7 @@ func TestPool_Resize(t *testing.T) {
 				t.Errorf("Resize failed error: %v", err.Error())
 			}
 
-			_ = pool.Start()
+			pool.Start()
 
 			if pool.GetSize() != size {
 				t.Errorf("resize didn't return correct size")
@@ -343,8 +341,8 @@ func TestPool_PositiveResizeLive(t *testing.T) {
 	for _, implementation := range implementations {
 		t.Run(implementation.name, func(t *testing.T) {
 			size := 2
-			pool := implementation.new(size).(Pool)
-			_ = pool.Start()
+			pool, _ := implementation.new(size)
+			pool.Start()
 
 			// Create Context
 			ctx := context.TODO()
@@ -390,8 +388,8 @@ func TestPool_NegativeResizeLive(t *testing.T) {
 	for _, implementation := range implementations {
 		t.Run(implementation.name, func(t *testing.T) {
 			size := 3
-			pool := implementation.new(size).(Pool)
-			_ = pool.Start()
+			pool, _ := implementation.new(size)
+			pool.Start()
 
 			// Create Context
 			ctx := context.TODO()
@@ -437,9 +435,9 @@ func BenchmarkOneThroughput(b *testing.B) {
 	for _, implementation := range implementations {
 		for _, workercount := range workersCountValues {
 			b.Run(fmt.Sprintf("[%s]S[%d]", implementation.name, workercount), func(b *testing.B) {
-				pool := implementation.new(workercount).(Pool)
+				pool, _ := implementation.new(workercount)
 
-				_ = pool.Start()
+				pool.Start()
 
 				b.ResetTimer()
 				b.StartTimer()
@@ -461,9 +459,9 @@ func BenchmarkOneJobSync(b *testing.B) {
 	for _, implementation := range implementations {
 		for _, workercount := range workersCountValues {
 			b.Run(fmt.Sprintf("[%s]S[%d]", implementation.name, workercount), func(b *testing.B) {
-				pool := implementation.new(workercount).(Pool)
+				pool, _ := implementation.new(workercount)
 
-				_ = pool.Start()
+				pool.Start()
 
 				b.ResetTimer()
 
@@ -489,8 +487,8 @@ func BenchmarkBulkJobs_UnderLimit(b *testing.B) {
 		for _, workercount := range workersCountValues {
 			for _, work := range workAmountValues {
 				b.Run(fmt.Sprintf("[%s]S[%d]J[%d]", implementation.name, workercount, work), func(b *testing.B) {
-					pool := implementation.new(workercount).(Pool)
-					_ = pool.Start()
+					pool, _ := implementation.new(workercount)
+					pool.Start()
 					b.ResetTimer()
 
 					for i2 := 0; i2 < b.N; i2++ {
@@ -520,8 +518,8 @@ func BenchmarkBulkJobs_OverLimit(b *testing.B) {
 		for _, workercount := range workersCountValues {
 			for _, work := range workAmountValues {
 				b.Run(fmt.Sprintf("[%s]S[%d]J[%d]", implementation.name, workercount, work), func(b *testing.B) {
-					pool := implementation.new(workercount).(Pool)
-					_ = pool.Start()
+					pool, _ := implementation.new(workercount)
+					pool.Start()
 					b.ResetTimer()
 
 					for i2 := 0; i2 < b.N; i2++ {
@@ -553,12 +551,13 @@ func Example_one() {
 	concurrency := 2
 
 	// Create and start pool.
-	var pool Pool = NewSemaphorePool(concurrency)
-	err := pool.Start()
+	pool, err := NewSemaphorePool(concurrency)
 
 	if err != nil {
 		panic(err)
 	}
+
+	pool.Start()
 
 	defer pool.Stop()
 
@@ -588,12 +587,13 @@ func Example_two() {
 	concurrency := 2
 
 	// Create and start pool.
-	var pool Pool = NewSemaphorePool(concurrency)
-	err := pool.Start()
+	pool, err := NewSemaphorePool(concurrency)
 
 	if err != nil {
 		panic(err)
 	}
+
+	pool.Start()
 
 	defer pool.Stop()
 
@@ -624,14 +624,16 @@ func Example_two() {
 
 // Example 3 - Enqueue 10 Jobs and Stop pool mid-processing.
 func Example_three() {
-	var pool Pool
-	pool = NewSemaphorePool(2)
-	log.Println("Starting Pool...")
-	err := pool.Start()
+	// Create and start pool.
+	pool, err := NewSemaphorePool(2)
 
 	if err != nil {
 		panic(err)
 	}
+
+	log.Println("Starting Pool...")
+
+	pool.Start()
 	defer pool.Stop()
 
 	ctx, cancel := context.WithCancel(context.Background())

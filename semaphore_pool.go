@@ -6,8 +6,8 @@ import (
 	"sync"
 )
 
-// SemaphorePool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
-type SemaphorePool struct {
+// semaphorePool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
+type semaphorePool struct {
 	workerCount int
 	semaphore   semaphore.Semaphore
 	ctx         context.Context
@@ -16,9 +16,15 @@ type SemaphorePool struct {
 	status      uint8
 }
 
-// NewSemaphorePool is SemaphorePool Constructor
-func NewSemaphorePool(size int) *SemaphorePool {
-	newWorkerPool := SemaphorePool{
+// NewSemaphorePool is semaphorePool Constructor
+// Returns ErrPoolInvalidSize if size is < 1.
+func NewSemaphorePool(size int) (Pool, error) {
+
+	if size < 1 {
+		return nil, ErrPoolInvalidSize
+	}
+
+	newWorkerPool := semaphorePool{
 		workerCount: size,
 		semaphore:   semaphore.New(1),
 		mu:          sync.Mutex{},
@@ -32,29 +38,24 @@ func NewSemaphorePool(size int) *SemaphorePool {
 	newWorkerPool.ctx, newWorkerPool.cancel = context.WithCancel(context.TODO())
 	newWorkerPool.cancel()
 
-	return &newWorkerPool
+	return &newWorkerPool, nil
 }
 
 // Start the Pool, otherwise it will not accept any job.
 //
-// Subsequent calls to Start will not have any effect unless Stop() is called. Will return ErrPoolInvalidSize
-// If pool size is < 1.
-func (w *SemaphorePool) Start() error {
+// Subsequent calls to Start will not have any effect unless Stop() is called.
+func (w *semaphorePool) Start() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.workerCount < 1 {
-		return ErrPoolInvalidSize
-	}
 	if w.status == poolStarted {
-		return nil
+		return
 	}
+
 	w.status = poolStarted
 	ctx := context.Background()
 	w.ctx, w.cancel = context.WithCancel(ctx)
 	w.semaphore = semaphore.New(w.workerCount)
-
-	return nil
 }
 
 // Stop the Pool.
@@ -63,7 +64,7 @@ func (w *SemaphorePool) Start() error {
 // 		2- All Jobs Processing will finish successfully
 //		3- Stop() WILL Block until all running jobs is done.
 // Subsequent Calls to Stop() will have no effect unless start() is called.
-func (w *SemaphorePool) Stop() {
+func (w *semaphorePool) Stop() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -96,7 +97,7 @@ func (w *SemaphorePool) Stop() {
 // Resize the pool size in concurrent-safe way.
 //
 //  `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is resized, in case of shrinking the pool `resize` will not affect any already processing job.
-func (w *SemaphorePool) Resize(newSize int) error {
+func (w *semaphorePool) Resize(newSize int) error {
 	if newSize < 1 {
 		return ErrPoolInvalidSize
 	}
@@ -125,7 +126,7 @@ func (w *SemaphorePool) Resize(newSize int) error {
 // @Returns nil once the job has pool_started.
 // @Returns ErrPoolClosed if the pool is not running.
 // @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
-func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
+func (w *semaphorePool) Enqueue(ctx context.Context, job func()) error {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	err := w.semaphore.Acquire(ctx, 1)
 
@@ -158,7 +159,7 @@ func (w *SemaphorePool) Enqueue(ctx context.Context, job func()) error {
 }
 
 // TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if the pool is closed or full.
-func (w *SemaphorePool) TryEnqueue(job func()) bool {
+func (w *semaphorePool) TryEnqueue(job func()) bool {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	if !w.semaphore.TryAcquire(1) {
 		return false
@@ -181,6 +182,6 @@ func (w *SemaphorePool) TryEnqueue(job func()) bool {
 }
 
 // GetSize return the current size of the pool.
-func (w *SemaphorePool) GetSize() int {
+func (w *semaphorePool) GetSize() int {
 	return w.workerCount
 }

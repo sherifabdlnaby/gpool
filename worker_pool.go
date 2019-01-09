@@ -6,8 +6,8 @@ import (
 	"sync"
 )
 
-// WorkerPool is an implementation of gpool.Pool interface to bound concurrency using a Worker goroutines.
-type WorkerPool struct {
+// workerPool is an implementation of gpool.Pool interface to bound concurrency using a Worker goroutines.
+type workerPool struct {
 	workerCount     int
 	workerPoolQueue chan *worker
 	wg              sync.WaitGroup
@@ -18,8 +18,14 @@ type WorkerPool struct {
 }
 
 // NewWorkerPool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
-func NewWorkerPool(workerCount int) *WorkerPool {
-	newWorkerPool := WorkerPool{
+// Returns ErrPoolInvalidSize if workercount is < 1.
+func NewWorkerPool(workerCount int) (Pool, error) {
+
+	if workerCount < 1 {
+		return nil, ErrPoolInvalidSize
+	}
+
+	newWorkerPool := workerPool{
 		workerCount: workerCount,
 		mu:          sync.Mutex{},
 		status:      poolClosed,
@@ -32,23 +38,18 @@ func NewWorkerPool(workerCount int) *WorkerPool {
 	newWorkerPool.ctx, newWorkerPool.cancel = context.WithCancel(context.TODO())
 	newWorkerPool.cancel()
 
-	return &newWorkerPool
+	return &newWorkerPool, nil
 }
 
 // Start the Pool, otherwise it will not accept any job.
 //
-// Subsequent calls to Start will not have any effect unless Stop() is called. Will return ErrPoolInvalidSize
-// If pool size is < 1.
-func (w *WorkerPool) Start() error {
+// Subsequent calls to Start will not have any effect unless Stop() is called.
+func (w *workerPool) Start() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.workerCount < 1 {
-		return ErrPoolInvalidSize
-	}
-
 	if w.status == poolStarted {
-		return nil
+		return
 	}
 
 	ctx := context.Background()
@@ -64,7 +65,7 @@ func (w *WorkerPool) Start() error {
 
 	w.status = poolStarted
 
-	return nil
+	return
 }
 
 // Stop the Pool.
@@ -73,7 +74,7 @@ func (w *WorkerPool) Start() error {
 // 		2- All Jobs Processing will finish successfully
 //		3- Stop() WILL Block until all running jobs is done.
 // Subsequent Calls to Stop() will have no effect unless start() is called.
-func (w *WorkerPool) Stop() {
+func (w *workerPool) Stop() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -97,7 +98,7 @@ func (w *WorkerPool) Stop() {
 // Resize the pool size in concurrent-safe way.
 //
 //  `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is resized, in case of shrinking the pool `resize` will not affect any already processing job.
-func (w *WorkerPool) Resize(newSize int) error {
+func (w *workerPool) Resize(newSize int) error {
 	if newSize < 1 {
 		return ErrPoolInvalidSize
 	}
@@ -137,7 +138,7 @@ func (w *WorkerPool) Resize(newSize int) error {
 // @Returns nil once the job has pool_started.
 // @Returns ErrPoolClosed if the pool is not running.
 // @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
-func (w *WorkerPool) Enqueue(ctx context.Context, job func()) error {
+func (w *workerPool) Enqueue(ctx context.Context, job func()) error {
 	select {
 	// The Job was canceled through job's context, no need to DO the work now.
 	case <-ctx.Done():
@@ -152,7 +153,7 @@ func (w *WorkerPool) Enqueue(ctx context.Context, job func()) error {
 }
 
 // TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if the pool is closed or full.
-func (w *WorkerPool) TryEnqueue(f func()) bool {
+func (w *workerPool) TryEnqueue(f func()) bool {
 	select {
 	case workerReceiveChan := <-w.workerPoolQueue:
 		workerReceiveChan.receive <- f
@@ -163,11 +164,11 @@ func (w *WorkerPool) TryEnqueue(f func()) bool {
 }
 
 // GetSize return the current size of the pool.
-func (w *WorkerPool) GetSize() int {
+func (w *workerPool) GetSize() int {
 	return w.workerCount
 }
 
-func (w *WorkerPool) addNewWorker() {
+func (w *workerPool) addNewWorker() {
 	worker := worker{
 		receive:    make(chan func()),
 		workerPool: w.workerPoolQueue,
@@ -178,7 +179,7 @@ func (w *WorkerPool) addNewWorker() {
 	worker.Start(&w.wg)
 }
 
-func (w *WorkerPool) removeWorker() {
+func (w *workerPool) removeWorker() {
 	// Pick worker from pool
 	worker := <-w.workerPoolQueue
 

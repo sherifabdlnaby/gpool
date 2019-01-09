@@ -13,13 +13,10 @@ const size = 2
 
 func main() {
 	var pool gpool.Pool
-	pool = gpool.NewSemaphorePool(size)
+	pool, _ = gpool.NewSemaphorePool(size)
 	log.Println("Starting Pool...")
-	err := pool.Start()
 
-	if err != nil {
-		panic(err)
-	}
+	pool.Start()
 	defer pool.Stop()
 
 	ctx, cancel := context.WithCancel(context.Background())

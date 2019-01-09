@@ -13,9 +13,8 @@ import (
 type Pool interface {
 	// Start the Pool, otherwise it will not accept any job.
 	//
-	// Subsequent calls to Start will not have any effect unless Stop() is called. Will return ErrPoolInvalidSize
-	// If pool size is < 1.
-	Start() error
+	// Subsequent calls to Start will not have any effect unless Stop() is called.
+	Start()
 
 	// Stop the Pool.
 	//
@@ -27,7 +26,7 @@ type Pool interface {
 
 	// Resize the pool size in concurrent-safe way.
 	//
-	//  `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is resized, in case of shrinking the pool `resize` will not affect any already processing job.
+	//  `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is re-sized, in case of shrinking the pool `resize` will not affect any already processing job.
 	Resize(int) error
 
 	// Enqueue Process job func(){} and returns ONCE the func has pool_started (not after it ends)
