@@ -27,7 +27,7 @@ func TestPool_Start(t *testing.T) {
 				pool, err := implementation.new(size)
 
 				if size < 1 && err == nil {
-					t.Errorf("pool construction succeded with invalid size")
+					t.Errorf("pool construction succeeded with invalid size")
 				}
 
 				if size < 1 && err != nil {
