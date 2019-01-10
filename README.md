@@ -1,9 +1,9 @@
 # gpool - A Generic bounded concurrency goroutine pool 
 
-[![](https://godoc.org/github.com/SherifAbdlNaby/gpool?status.svg)](http://godoc.org/github.com/SherifAbdlNaby/gpool)
-[![Go Report Card](https://goreportcard.com/badge/github.com/SherifAbdlNaby/gpool)](https://goreportcard.com/report/github.com/SherifAbdlNaby/gpool)
-[![Build Status](https://travis-ci.org/Sherifabdlnaby/gpool.svg?branch=func)](https://travis-ci.org/Sherifabdlnaby/gpool)
-[![codecov](https://codecov.io/gh/Sherifabdlnaby/gpool/branch/func/graph/badge.svg)](https://codecov.io/gh/Sherifabdlnaby/gpool)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go#goroutines)  [![](https://godoc.org/github.com/SherifAbdlNaby/gpool?status.svg)](http://godoc.org/github.com/SherifAbdlNaby/gpool)
+[![Go Report Card](https://goreportcard.com/badge/github.com/sherifabdlnaby/gpool)](https://goreportcard.com/report/github.com/sherifabdlnaby/gpool)
+[![Build Status](https://travis-ci.org/sherifabdlnaby/gpool.svg?branch=func)](https://travis-ci.org/sherifabdlnaby/gpool)
+[![codecov](https://codecov.io/gh/sherifabdlnaby/gpool/branch/func/graph/badge.svg)](https://codecov.io/gh/sherifabdlnaby/gpool)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/SherifAbdlNaby/gpool/blob/master/LICENSE)
 
 ## Installation
