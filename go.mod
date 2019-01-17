@@ -1,3 +1,3 @@
 module github.com/sherifabdlnaby/gpool
 
-require github.com/marusama/semaphore v0.0.0-20181027083059-edd5217b5829
+require github.com/sherifabdlnaby/semaphore v0.0.0-20190117073948-fc3e9b0e3834

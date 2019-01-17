@@ -2,14 +2,14 @@ package gpool
 
 import (
 	"context"
-	"github.com/marusama/semaphore"
+	"github.com/sherifabdlnaby/semaphore"
 	"sync"
 )
 
 // SemaphorePool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
 type SemaphorePool struct {
 	workerCount int
-	semaphore   semaphore.Semaphore
+	semaphore   *semaphore.Weighted
 	ctx         context.Context
 	cancel      context.CancelFunc
 	mu          sync.Mutex
@@ -26,7 +26,7 @@ func NewSemaphorePool(size int) (Pool, error) {
 
 	newWorkerPool := SemaphorePool{
 		workerCount: size,
-		semaphore:   semaphore.New(1),
+		semaphore:   semaphore.NewWeighted(int64(1)),
 		mu:          sync.Mutex{},
 		status:      poolClosed,
 	}
@@ -55,7 +55,7 @@ func (w *SemaphorePool) Start() {
 	w.status = poolStarted
 	ctx := context.Background()
 	w.ctx, w.cancel = context.WithCancel(ctx)
-	w.semaphore = semaphore.New(w.workerCount)
+	w.semaphore = semaphore.NewWeighted(int64(w.workerCount))
 }
 
 // Stop the Pool.
@@ -75,19 +75,11 @@ func (w *SemaphorePool) Stop() {
 	// Send Cancellation Signal to stop all waiting work
 	w.cancel()
 
-	/*
-		// Try to Acquire the whole Semaphore ( This will block until all ACTIVE works are done )
-		_ = w.semaphore.Acquire(context.Background(), w.workerCount)
-	*/
-
 	// Try to Acquire the whole Semaphore ( This will block until all ACTIVE works are done )
-	// Acquire 1 by 1 because a bug I found when N > GOMAXPROCS -> https://github.com/cockroachdb/cockroach/issues/33554
-	for i := 0; i < w.workerCount; i++ {
-		_ = w.semaphore.Acquire(context.TODO(), 1)
-	}
+	_ = w.semaphore.Acquire(context.Background(), int64(w.workerCount))
 
 	// Release the Semaphore so that subsequent enqueues will not block and return ErrPoolClosed.
-	w.semaphore.Release(w.workerCount)
+	w.semaphore.Release(int64(w.workerCount))
 
 	w.status = poolClosed
 
@@ -109,7 +101,7 @@ func (w *SemaphorePool) Resize(newSize int) error {
 
 	// If already pool_started live resize semaphore limit.
 	if w.status == poolStarted {
-		w.semaphore.SetLimit(newSize)
+		w.semaphore.Resize(int64(newSize))
 	}
 
 	w.mu.Unlock()
