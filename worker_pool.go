@@ -6,8 +6,8 @@ import (
 	"sync"
 )
 
-// workerPool is an implementation of gpool.Pool interface to bound concurrency using a Worker goroutines.
-type workerPool struct {
+// WorkerPool is an implementation of gpool.Pool interface to bound concurrency using a Worker goroutines.
+type WorkerPool struct {
 	workerCount     int
 	workerPoolQueue chan *worker
 	wg              sync.WaitGroup
@@ -17,15 +17,15 @@ type workerPool struct {
 	status          uint8
 }
 
-// NewWorkerPool is an implementation of gpool.Pool interface to bound concurrency using a Semaphore.
-// Returns ErrPoolInvalidSize if workercount is < 1.
+// NewWorkerPool returns a pool that uses semaphore implementation.
+// Returns ErrPoolInvalidSize if workerCount is < 1.
 func NewWorkerPool(workerCount int) (Pool, error) {
 
 	if workerCount < 1 {
 		return nil, ErrPoolInvalidSize
 	}
 
-	newWorkerPool := workerPool{
+	newWorkerPool := WorkerPool{
 		workerCount: workerCount,
 		mu:          sync.Mutex{},
 		status:      poolClosed,
@@ -44,7 +44,7 @@ func NewWorkerPool(workerCount int) (Pool, error) {
 // Start the Pool, otherwise it will not accept any job.
 //
 // Subsequent calls to Start will not have any effect unless Stop() is called.
-func (w *workerPool) Start() {
+func (w *WorkerPool) Start() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -74,7 +74,7 @@ func (w *workerPool) Start() {
 // 		2- All Jobs Processing will finish successfully
 //		3- Stop() WILL Block until all running jobs is done.
 // Subsequent Calls to Stop() will have no effect unless start() is called.
-func (w *workerPool) Stop() {
+func (w *WorkerPool) Stop() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -98,7 +98,7 @@ func (w *workerPool) Stop() {
 // Resize the pool size in concurrent-safe way.
 //
 //  `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is resized, in case of shrinking the pool `resize` will not affect any already processing job.
-func (w *workerPool) Resize(newSize int) error {
+func (w *WorkerPool) Resize(newSize int) error {
 	if newSize < 1 {
 		return ErrPoolInvalidSize
 	}
@@ -138,7 +138,7 @@ func (w *workerPool) Resize(newSize int) error {
 // @Returns nil once the job has pool_started.
 // @Returns ErrPoolClosed if the pool is not running.
 // @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
-func (w *workerPool) Enqueue(ctx context.Context, job func()) error {
+func (w *WorkerPool) Enqueue(ctx context.Context, job func()) error {
 	select {
 	// The Job was canceled through job's context, no need to DO the work now.
 	case <-ctx.Done():
@@ -153,7 +153,7 @@ func (w *workerPool) Enqueue(ctx context.Context, job func()) error {
 }
 
 // TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if the pool is closed or full.
-func (w *workerPool) TryEnqueue(f func()) bool {
+func (w *WorkerPool) TryEnqueue(f func()) bool {
 	select {
 	case workerReceiveChan := <-w.workerPoolQueue:
 		workerReceiveChan.receive <- f
@@ -164,11 +164,11 @@ func (w *workerPool) TryEnqueue(f func()) bool {
 }
 
 // GetSize return the current size of the pool.
-func (w *workerPool) GetSize() int {
+func (w *WorkerPool) GetSize() int {
 	return w.workerCount
 }
 
-func (w *workerPool) addNewWorker() {
+func (w *WorkerPool) addNewWorker() {
 	worker := worker{
 		receive:    make(chan func()),
 		workerPool: w.workerPoolQueue,
@@ -179,7 +179,7 @@ func (w *workerPool) addNewWorker() {
 	worker.Start(&w.wg)
 }
 
-func (w *workerPool) removeWorker() {
+func (w *WorkerPool) removeWorker() {
 	// Pick worker from pool
 	worker := <-w.workerPoolQueue
 
