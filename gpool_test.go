@@ -1,8 +1,9 @@
-package gpool
+package gpool_test
 
 import (
 	"context"
 	"fmt"
+	"github.com/sherifabdlnaby/gpool"
 	"log"
 	"sync"
 	"testing"
@@ -11,10 +12,10 @@ import (
 
 var implementations = []struct {
 	name string
-	new  func(int) (Pool, error)
+	new  func(int) (gpool.Pool, error)
 }{
-	{name: "Semaphore", new: NewSemaphorePool},
-	{name: "Workerpool", new: NewWorkerPool},
+	{name: "Semaphore", new: gpool.NewSemaphorePool},
+	{name: "Workerpool", new: gpool.NewWorkerPool},
 }
 
 // -------------- Testing --------------
@@ -31,7 +32,7 @@ func TestPool_Start(t *testing.T) {
 				}
 
 				if size < 1 && err != nil {
-					if err != ErrPoolInvalidSize {
+					if err != gpool.ErrPoolInvalidSize {
 						t.Errorf("pool construction failed but returned incorrect error")
 					}
 					return
@@ -48,7 +49,7 @@ func TestPool_Start(t *testing.T) {
 					t.Error("Pool Enqueued a Job before pool starts.")
 				}
 
-				if Err != ErrPoolClosed {
+				if Err != gpool.ErrPoolClosed {
 					t.Error("Pool Sent an incorrect error type")
 				}
 
@@ -92,7 +93,7 @@ func TestPool_Stop(t *testing.T) {
 			if Err == nil {
 				t.Errorf("Accepted Job after Stopping the pool")
 			}
-			if Err != ErrPoolClosed {
+			if Err != gpool.ErrPoolClosed {
 				t.Errorf("Returned Incorrect Error after sending job to stopped pool")
 			}
 		})
@@ -202,7 +203,7 @@ func TestPool_EnqueueBlocking(t *testing.T) {
 			if Err3 == nil {
 				t.Error("Didn't Return Error in a waiting & canceled job")
 			}
-			if Err3 != ErrJobCanceled {
+			if Err3 != gpool.ErrJobCanceled {
 				t.Errorf("Canceled Job returned wronge type of Error. Error: %s", Err3.Error())
 			}
 
@@ -318,7 +319,7 @@ func TestPool_Resize(t *testing.T) {
 			if err == nil {
 				t.Errorf("Resize to invalid size didn't return error!")
 			}
-			if err != ErrPoolInvalidSize {
+			if err != gpool.ErrPoolInvalidSize {
 				t.Errorf("Resize to invalid size returned wrong error!")
 			}
 
@@ -551,7 +552,7 @@ func Example_one() {
 	concurrency := 2
 
 	// Create and start pool.
-	pool, err := NewSemaphorePool(concurrency)
+	pool, err := gpool.NewSemaphorePool(concurrency)
 
 	if err != nil {
 		panic(err)
@@ -587,7 +588,7 @@ func Example_two() {
 	concurrency := 2
 
 	// Create and start pool.
-	pool, err := NewSemaphorePool(concurrency)
+	pool, err := gpool.NewSemaphorePool(concurrency)
 
 	if err != nil {
 		panic(err)
@@ -625,7 +626,7 @@ func Example_two() {
 // Example 3 - Enqueue 10 Jobs and Stop pool mid-processing.
 func Example_three() {
 	// Create and start pool.
-	pool, err := NewSemaphorePool(2)
+	pool, err := gpool.NewSemaphorePool(2)
 
 	if err != nil {
 		panic(err)
