@@ -201,7 +201,7 @@ func (w *Pool) TryEnqueue(job func()) bool {
 	return true
 }
 
-// TryEnqueue will not block if the pool is full, will return true once the job has finished processing or false if the pool is closed or full.
+// TryEnqueueAndWait will not block if the pool is full, will return true once the job has finished processing or false if the pool is closed or full.
 func (w *Pool) TryEnqueueAndWait(job func()) bool {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	// False if semaphore is full or status not started.
