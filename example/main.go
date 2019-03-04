@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/sherifabdlnaby/gpool"
 	"log"
 	"time"
@@ -12,56 +11,30 @@ import (
 const size = 2
 
 func main() {
-	pool, _ := gpool.NewPool(size)
-	log.Println("Starting Pool...")
+	concurrency := 2
 
+	// Create and start pool.
+	pool, _ := gpool.NewPool(concurrency)
 	pool.Start()
 	defer pool.Stop()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// Create JOB
+	resultChan1 := make(chan int)
+	ctx := context.Background()
+	job := func() {
+		time.Sleep(2000 * time.Millisecond)
+		resultChan1 <- 1337
+	}
 
-	go func() {
-		for i := 0; i < 10; i++ {
+	// Enqueue Job
+	err1 := pool.Enqueue(ctx, job)
 
-			// Small Interval for more readable output
-			time.Sleep(500 * time.Millisecond)
+	if err1 != nil {
+		log.Printf("Job was not enqueued. Error: [%s]", err1.Error())
+		return
+	}
 
-			go func(i int) {
-				x := make(chan int, 1)
+	log.Printf("Job Enqueued and started processing")
 
-				log.Printf("Job [%v] Enqueueing", i)
-
-				err := pool.Enqueue(ctx, func() {
-					time.Sleep(2000 * time.Millisecond)
-					x <- i
-				})
-
-				if err != nil {
-					log.Printf("Job [%v] was not enqueued. [%s]", i, err.Error())
-					return
-				}
-
-				log.Printf("Job [%v] Enqueue-ed ", i)
-
-				log.Printf("Job [%v] Receieved, Result: [%v]", i, <-x)
-			}(i)
-		}
-	}()
-
-	// Uncomment to demonstrate ctx cancel of jobs.
-	//time.Sleep(100 * time.Millisecond)
-	//cancel()
-
-	time.Sleep(5000 * time.Millisecond)
-
-	fmt.Println("Stopping...")
-
-	pool.Stop()
-
-	fmt.Println("Stopped")
-
-	fmt.Println("Sleeping for couple of seconds so canceled job have a chance to print out their status")
-
-	time.Sleep(4000 * time.Millisecond)
+	log.Printf("Job Done, Received: %v", <-resultChan1)
 }

@@ -48,37 +48,32 @@ further documentation at : [![](https://godoc.org/github.com/SherifAbdlNaby/gpoo
 ### Example 1 - Simple Job Enqueue
 ```go
 func main() {
-  concurrency := 2
+    concurrency := 2
 
-  // Create and start pool.
-  var pool gpool.Pool = gpool.NewSemaphorePool(concurrency)
-  err := pool.Start()
+    // Create and start pool.
+    pool, _ := gpool.NewPool(concurrency)
+    pool.Start()
+    defer pool.Stop()
 
-  if err != nil {
-    panic(err)
-  }
+    // Create JOB
+    resultChan1 := make(chan int)
+    ctx := context.Background()
+    job := func() {
+        time.Sleep(2000 * time.Millisecond)
+        resultChan1 <- 1337
+    }
 
-  defer pool.Stop()
+    // Enqueue Job
+    err1 := pool.Enqueue(ctx, job)
 
-  // Create JOB
-  resultChan1 := make(chan int)
-  ctx := context.Background()
-  job := func() {
-    time.Sleep(2000 * time.Millisecond)
-    resultChan1 <- 1337
-  }
+    if err1 != nil {
+        log.Printf("Job was not enqueued. Error: [%s]", err1.Error())
+        return
+    }
 
-  // Enqueue Job
-  err1 := pool.Enqueue(ctx, job)
+    log.Printf("Job Enqueued and started processing")
 
-  if err1 != nil {
-    log.Printf("Job was not enqueued. Error: [%s]", err1.Error())
-    return
-  }
-
-  log.Printf("Job Enqueued and started processing")
-
-  log.Printf("Job Done, Received: %v", <-resultChan1)
+    log.Printf("Job Done, Received: %v", <-resultChan1)
 }
 ```
 ----------
@@ -90,13 +85,8 @@ func main() {
   concurrency := 2
 
   // Create and start pool.
-  var pool gpool.Pool = gpool.NewSemaphorePool(concurrency)
-  err := pool.Start()
-
-  if err != nil {
-    panic(err)
-  }
-
+  pool, _ := gpool.NewPool(concurrency)
+  pool.Start()
   defer pool.Stop()
 
   // Create JOB
@@ -130,17 +120,11 @@ func main() {
 ### Example 3
 ``` go
 // size Workers / Concurrent jobs of the Pool
-const size = 2
+const concurrency = 2
 
 func main() {
-  var pool gpool.Pool
-  pool = gpool.NewSemaphorePool(size)
-  log.Println("Starting Pool...")
-  err := pool.Start()
-
-  if err != nil {
-    panic(err)
-  }
+  pool, _ := gpool.NewPool(concurrency)
+  pool.Start()
   defer pool.Stop()
 
   ctx, cancel := context.WithCancel(context.Background())
