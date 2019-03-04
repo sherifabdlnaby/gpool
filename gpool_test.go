@@ -16,7 +16,7 @@ func TestPool_Start(t *testing.T) {
 	// Test sizes for  < 0, 0 and > 0 size.
 	for size := -1; size <= 2; size++ {
 		t.Run(fmt.Sprintf("Size[%d]", size), func(t *testing.T) {
-			pool, err := gpool.NewSemaphorePool(size)
+			pool, err := gpool.NewPool(size)
 
 			if size < 1 && err == nil {
 				t.Errorf("pool construction succeeded with invalid size")
@@ -73,7 +73,7 @@ func TestPool_Start(t *testing.T) {
 
 func TestPool_Stop(t *testing.T) {
 
-	pool, _ := gpool.NewSemaphorePool(10)
+	pool, _ := gpool.NewPool(10)
 
 	/// Start Worker
 	pool.Start()
@@ -97,7 +97,7 @@ func TestPool_Stop(t *testing.T) {
 
 func TestPool_Restart(t *testing.T) {
 
-	pool, _ := gpool.NewSemaphorePool(1)
+	pool, _ := gpool.NewPool(1)
 	/// Start Worker
 	pool.Start()
 
@@ -121,7 +121,7 @@ func TestPool_Restart(t *testing.T) {
 
 func TestPool_Enqueue(t *testing.T) {
 
-	pool, _ := gpool.NewSemaphorePool(2)
+	pool, _ := gpool.NewPool(2)
 	// Start Worker
 	pool.Start()
 
@@ -144,7 +144,7 @@ func TestPool_Enqueue(t *testing.T) {
 
 func TestPool_EnqueueAndWait(t *testing.T) {
 
-	pool, _ := gpool.NewSemaphorePool(2)
+	pool, _ := gpool.NewPool(2)
 	// Start Worker
 	pool.Start()
 
@@ -178,7 +178,7 @@ func TestPool_EnqueueAndWait(t *testing.T) {
 
 func TestPool_EnqueueBlocking(t *testing.T) {
 
-	pool, _ := gpool.NewSemaphorePool(2)
+	pool, _ := gpool.NewPool(2)
 
 	// Create Context
 	ctx := context.TODO()
@@ -247,7 +247,7 @@ func TestPool_EnqueueBlocking(t *testing.T) {
 
 func TestPool_EnqueueAndWaitBlocking(t *testing.T) {
 
-	pool, _ := gpool.NewSemaphorePool(1)
+	pool, _ := gpool.NewPool(1)
 
 	// Create Context
 	ctx := context.TODO()
@@ -278,7 +278,7 @@ func TestPool_EnqueueAndWaitBlocking(t *testing.T) {
 
 func TestPool_TryEnqueue(t *testing.T) {
 
-	pool, _ := gpool.NewSemaphorePool(2)
+	pool, _ := gpool.NewPool(2)
 	x := make(chan int, 1)
 
 	/// Start Worker
@@ -324,7 +324,7 @@ func TestPool_TryEnqueue(t *testing.T) {
 
 func TestSemaphorePool_TryEnqueueAndWait(t *testing.T) {
 
-	pool, _ := gpool.NewSemaphorePool(2)
+	pool, _ := gpool.NewPool(2)
 	x := make(chan int, 1)
 
 	/// Start Worker
@@ -381,7 +381,7 @@ func TestSemaphorePool_TryEnqueueAndWait(t *testing.T) {
 func TestPool_GetSize(t *testing.T) {
 
 	size := 10
-	pool, _ := gpool.NewSemaphorePool(size)
+	pool, _ := gpool.NewPool(size)
 	pool.Start()
 	if pool.GetSize() != size {
 		t.Errorf("GetSize() returned incorrect size")
@@ -402,7 +402,7 @@ func TestPool_GetSize(t *testing.T) {
 
 func TestPool_Resize(t *testing.T) {
 	size := 10
-	pool, _ := gpool.NewSemaphorePool(size)
+	pool, _ := gpool.NewPool(size)
 
 	// resize to new size
 	size = 0
@@ -429,7 +429,7 @@ func TestPool_Resize(t *testing.T) {
 
 func TestPool_PositiveResizeLive(t *testing.T) {
 	size := 2
-	pool, _ := gpool.NewSemaphorePool(size)
+	pool, _ := gpool.NewPool(size)
 	pool.Start()
 
 	// Create Context
@@ -473,7 +473,7 @@ func TestPool_PositiveResizeLive(t *testing.T) {
 func TestPool_NegativeResizeLive(t *testing.T) {
 
 	size := 3
-	pool, _ := gpool.NewSemaphorePool(size)
+	pool, _ := gpool.NewPool(size)
 	pool.Start()
 
 	// Create Context
@@ -512,7 +512,7 @@ func TestPool_NegativeResizeLive(t *testing.T) {
 func TestPool_Getters(t *testing.T) {
 
 	size := 2
-	pool, _ := gpool.NewSemaphorePool(size)
+	pool, _ := gpool.NewPool(size)
 	pool.Start()
 
 	if pool.GetSize() != size {
@@ -565,7 +565,7 @@ func BenchmarkOneThroughput(b *testing.B) {
 	var workersCountValues = []int{10, 100, 1000, 10000}
 	for _, workercount := range workersCountValues {
 		b.Run(fmt.Sprintf("Size[%d]", workercount), func(b *testing.B) {
-			pool, _ := gpool.NewSemaphorePool(workercount)
+			pool, _ := gpool.NewPool(workercount)
 
 			pool.Start()
 
@@ -588,7 +588,7 @@ func BenchmarkOneJobSync(b *testing.B) {
 
 	for _, workercount := range workersCountValues {
 		b.Run(fmt.Sprintf("Size[%d]", workercount), func(b *testing.B) {
-			pool, _ := gpool.NewSemaphorePool(workercount)
+			pool, _ := gpool.NewPool(workercount)
 
 			pool.Start()
 
@@ -615,7 +615,7 @@ func BenchmarkBulkJobs_UnderLimit(b *testing.B) {
 	for _, workercount := range workersCountValues {
 		for _, work := range workAmountValues {
 			b.Run(fmt.Sprintf("Size[%d]J[%d]", workercount, work), func(b *testing.B) {
-				pool, _ := gpool.NewSemaphorePool(workercount)
+				pool, _ := gpool.NewPool(workercount)
 				pool.Start()
 				b.ResetTimer()
 
@@ -645,7 +645,7 @@ func BenchmarkBulkJobs_OverLimit(b *testing.B) {
 	for _, workercount := range workersCountValues {
 		for _, work := range workAmountValues {
 			b.Run(fmt.Sprintf("Size[%d]J[%d]", workercount, work), func(b *testing.B) {
-				pool, _ := gpool.NewSemaphorePool(workercount)
+				pool, _ := gpool.NewPool(workercount)
 				pool.Start()
 				b.ResetTimer()
 
@@ -677,7 +677,7 @@ func Example_one() {
 	concurrency := 2
 
 	// Create and start pool.
-	pool, err := gpool.NewSemaphorePool(concurrency)
+	pool, err := gpool.NewPool(concurrency)
 
 	if err != nil {
 		panic(err)
@@ -713,7 +713,7 @@ func Example_two() {
 	concurrency := 2
 
 	// Create and start pool.
-	pool, err := gpool.NewSemaphorePool(concurrency)
+	pool, err := gpool.NewPool(concurrency)
 
 	if err != nil {
 		panic(err)
@@ -751,7 +751,7 @@ func Example_two() {
 // Example 3 - Enqueue 10 Jobs and Stop pool mid-processing.
 func Example_three() {
 	// Create and start pool.
-	pool, err := gpool.NewSemaphorePool(2)
+	pool, err := gpool.NewPool(2)
 
 	if err != nil {
 		panic(err)

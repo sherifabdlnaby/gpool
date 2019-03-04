@@ -10,6 +10,3 @@
 //     Enqueuing a Job will return error nil once a job starts, ErrPoolClosed if the pool is closed, or ErrJobCanceled if the job's context is canceled while blocking waiting for the pool.
 //     Start, Stop, and Resize(N) is all concurrent safe and can be called from multiple goroutines, subsequent calls of Start or Stop has no effect unless called interchangeably.
 package gpool
-
-// Version gpool current interface version.
-var Version = "1.0.0"

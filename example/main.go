@@ -12,8 +12,7 @@ import (
 const size = 2
 
 func main() {
-	var pool gpool.Pool
-	pool, _ = gpool.NewSemaphorePool(size)
+	pool, _ := gpool.NewPool(size)
 	log.Println("Starting Pool...")
 
 	pool.Start()
