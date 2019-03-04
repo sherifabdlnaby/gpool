@@ -40,11 +40,31 @@ type Pool interface {
 	// @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
 	Enqueue(context.Context, func()) error
 
+	// EnqueueAndWait Process job `func(){...}` and returns ONCE the func has returned.
+	//
+	// If the pool is full `Enqueue()` will block until either:
+	// 		1- A worker/slot in the pool is done and is ready to take the job.
+	//		2- The Job context is canceled.
+	//		3- The Pool is closed by `pool.Stop()`.
+	// @Returns nil once the job has executed and returned.
+	// @Returns ErrPoolClosed if the pool is not running.
+	// @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
+	EnqueueAndWait(ctx context.Context, job func()) error
+
 	// TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if the pool is closed or full.
 	TryEnqueue(func()) bool
 
+	// TryEnqueue will not block if the pool is full, will return true once the job has finished processing or false if the pool is closed or full.
+	TryEnqueueAndWait(job func()) bool
+
 	// GetSize return the current size of the pool.
 	GetSize() int
+
+	// GetCurrent returns the current size of the pool.
+	GetCurrent() int
+
+	// GetWaiting return the current size of jobs waiting in the pool.
+	GetWaiting() int
 }
 
 var (
