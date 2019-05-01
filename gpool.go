@@ -3,9 +3,10 @@ package gpool
 import (
 	"context"
 	"errors"
-	"github.com/sherifabdlnaby/semaphore"
 	"math"
 	"sync"
+
+	"github.com/sherifabdlnaby/semaphore"
 )
 
 var (
@@ -14,9 +15,6 @@ var (
 
 	// ErrPoolClosed Error Returned if the Pool has not pool_started yet, or was stopped.
 	ErrPoolClosed = errors.New("pool is closed")
-
-	// ErrJobCanceled Error Returned if the job's context was canceled while blocking waiting for the pool.
-	ErrJobCanceled = errors.New("job canceled")
 )
 
 const (
@@ -122,14 +120,14 @@ func (w *Pool) Resize(newSize int) error {
 //		3- The Pool is closed by `pool.Stop()`.
 // @Returns nil once the job has started executing.
 // @Returns ErrPoolClosed if the pool is not running.
-// @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
+// @Returns ctx.Err() if the job Enqueued context was canceled before the job could be processed by the pool.
 func (w *Pool) Enqueue(ctx context.Context, job func()) error {
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	err := w.semaphore.Acquire(ctx, 1)
 
 	// The Job was canceled through job's context, no need to DO the work now.
 	if err != nil {
-		return ErrJobCanceled
+		return err
 	}
 
 	// Check if pool is running
@@ -157,7 +155,7 @@ func (w *Pool) Enqueue(ctx context.Context, job func()) error {
 //		3- The Pool is closed by `pool.Stop()`.
 // @Returns nil once the job has executed and returned.
 // @Returns ErrPoolClosed if the pool is not running.
-// @Returns ErrJobCanceled if the job Enqueued context was canceled before the job could be processed by the pool.
+// @Returns ctx.Err() if the job Enqueued context was canceled before the job could be processed by the pool.
 func (w *Pool) EnqueueAndWait(ctx context.Context, job func()) error {
 
 	// Acquire 1 from semaphore ( aka Acquire one worker )
@@ -165,7 +163,7 @@ func (w *Pool) EnqueueAndWait(ctx context.Context, job func()) error {
 
 	// The Job was canceled through job's context, no need to DO the work now.
 	if err != nil {
-		return ErrJobCanceled
+		return err
 	}
 
 	// Check if pool is running

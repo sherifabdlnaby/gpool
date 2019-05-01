@@ -3,11 +3,12 @@ package gpool_test
 import (
 	"context"
 	"fmt"
-	"github.com/sherifabdlnaby/gpool"
 	"log"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sherifabdlnaby/gpool"
 )
 
 // -------------- Testing --------------
@@ -217,9 +218,6 @@ func TestPool_EnqueueBlocking(t *testing.T) {
 	if Err3 == nil {
 		t.Error("Didn't Return Error in a waiting & canceled job")
 	}
-	if Err3 != gpool.ErrJobCanceled {
-		t.Errorf("Canceled Job returned wronge type of Error. Error: %s", Err3.Error())
-	}
 
 	// Check that Job C didn't finish before ONE of A & B finish and make room in the pool.
 	for i := 0; i < 3; i++ {
@@ -268,10 +266,6 @@ func TestPool_EnqueueAndWaitBlocking(t *testing.T) {
 
 	if Err1 == nil {
 		t.Error("Didn't Return Error in a waiting & canceled job")
-	}
-
-	if Err1 != gpool.ErrJobCanceled {
-		t.Errorf("Canceled Job returned wronge type of Error. Error: %s", Err1.Error())
 	}
 
 }
@@ -561,10 +555,10 @@ func TestPool_Getters(t *testing.T) {
 
 // ------------ Benchmarking ------------
 
-func BenchmarkOneThroughput(b *testing.B) {
+func BenchmarkThroughput(b *testing.B) {
 	var workersCountValues = []int{10, 100, 1000, 10000}
 	for _, workercount := range workersCountValues {
-		b.Run(fmt.Sprintf("Size[%d]", workercount), func(b *testing.B) {
+		b.Run(fmt.Sprintf("PoolSize[%d]", workercount), func(b *testing.B) {
 			pool, _ := gpool.NewPool(workercount)
 
 			pool.Start()
@@ -583,38 +577,13 @@ func BenchmarkOneThroughput(b *testing.B) {
 	}
 }
 
-func BenchmarkOneJobSync(b *testing.B) {
-	var workersCountValues = []int{10, 100, 1000, 10000}
-
-	for _, workercount := range workersCountValues {
-		b.Run(fmt.Sprintf("Size[%d]", workercount), func(b *testing.B) {
-			pool, _ := gpool.NewPool(workercount)
-
-			pool.Start()
-
-			b.ResetTimer()
-
-			resultChan := make(chan int, 1)
-			for i2 := 0; i2 < b.N; i2++ {
-				_ = pool.Enqueue(context.TODO(), func() {
-					resultChan <- 123
-				})
-				<-resultChan
-			}
-
-			b.StopTimer()
-			pool.Stop()
-		})
-	}
-}
-
 func BenchmarkBulkJobs_UnderLimit(b *testing.B) {
 	var workersCountValues = []int{10000}
 	var workAmountValues = []int{100, 1000, 10000}
 
 	for _, workercount := range workersCountValues {
 		for _, work := range workAmountValues {
-			b.Run(fmt.Sprintf("Size[%d]J[%d]", workercount, work), func(b *testing.B) {
+			b.Run(fmt.Sprintf("PoolSize[%d]BulkJobs[%d]", workercount, work), func(b *testing.B) {
 				pool, _ := gpool.NewPool(workercount)
 				pool.Start()
 				b.ResetTimer()
@@ -644,7 +613,7 @@ func BenchmarkBulkJobs_OverLimit(b *testing.B) {
 
 	for _, workercount := range workersCountValues {
 		for _, work := range workAmountValues {
-			b.Run(fmt.Sprintf("Size[%d]J[%d]", workercount, work), func(b *testing.B) {
+			b.Run(fmt.Sprintf("PoolSize[%d]BulkJobs[%d]", workercount, work), func(b *testing.B) {
 				pool, _ := gpool.NewPool(workercount)
 				pool.Start()
 				b.ResetTimer()
