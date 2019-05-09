@@ -1,6 +1,6 @@
 # gpool - A Generic bounded concurrency goroutine pool 
 
-[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go#goroutines)  [![](https://godoc.org/github.com/SherifAbdlNaby/gpool?status.svg)](http://godoc.org/github.com/SherifAbdlNaby/gpool)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go#goroutines)  [![](https://godoc.org/github.com/sherifabdlnaby/gpool?status.svg)](http://godoc.org/github.com/sherifabdlnaby/gpool)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sherifabdlnaby/gpool)](https://goreportcard.com/report/github.com/sherifabdlnaby/gpool)
 [![Build Status](https://travis-ci.org/sherifabdlnaby/gpool.svg?branch=func)](https://travis-ci.org/sherifabdlnaby/gpool)
 [![codecov](https://codecov.io/gh/sherifabdlnaby/gpool/branch/func/graph/badge.svg)](https://codecov.io/gh/sherifabdlnaby/gpool)
@@ -23,24 +23,66 @@ Easily manages a resizeable pool of context aware goroutines to bound concurrenc
   2. job's `context` is canceled.
   3. the pool is stopped.
 
-
-- A Pool is either `closed` or `started`, the Pool will not accept any job unless `pool.Start()` is called.
-
-  Stopping the Pool using `pool.Stop()` it will **wait** for all processing jobs to finish before returning, it will also unblock any **blocked** job enqueues (enqueues will return ErrPoolClosed).
-
 - The Pool can be re-sized using `Resize()` that will resize the pool in a concurrent safe-way. `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is resized, in case of shrinking the pool `resize` will not affect any already processing/waiting jobs.
 
 - Enqueuing a Job will return error `nil` once a job starts, `ErrPoolClosed` if the pool is closed, or the context's error if the job's context is canceled while blocking waiting for the pool.
 
+- The Pool will not accept any job unless `pool.Start()` is called.
+
+- Stopping the Pool using `pool.Stop()` will **wait** for all processing jobs to finish before returning, it will also unblock any **blocked** job enqueues (enqueues will return ErrPoolClosed).
+
 - `Start`, `Stop`, and `Resize(N)` are all concurrent safe and can be called from multiple goroutines, subsequent calls of Start or Stop has no effect unless called interchangeably.
 
-#### Two Implementation
-gPool has two implementation for the same Pool Interface{} and both has the same exact behavior, Implementation 1: uses workerpool pattern and 2: uses Semaphore.
-According to benchmarks below Semaphore has significantly less overhead than workerpool.
+further documentation at : [![](https://godoc.org/github.com/sherifabdlnaby/gpool?status.svg)](http://godoc.org/github.com/sherifabdlnaby/gpool)
 
-further documentation at : [![](https://godoc.org/github.com/SherifAbdlNaby/gpool?status.svg)](http://godoc.org/github.com/SherifAbdlNaby/gpool)
+------------------------------------------------------
 
----------------
+## Usage
+
+- Create new pool
+    ```
+    pool, err := gpool.NewPool(concurrency)
+    ```
+- Start the pool
+    (otherwise the pool will not accept any jobs and returns `ErrPoolClosed` when enqueued)
+    ```
+    pool.Start()
+    ```
+- Enqueue a job
+    ```
+        job := func() {
+            time.Sleep(2000 * time.Millisecond)
+            fmt.Println("did some work")
+        }
+
+        // Enqueue Job
+        err := pool.Enqueue(ctx, job)
+    ```
+    A call to `pool.Enqueue()` will return `nil` if `job` started processing, blocks if the pool is full, `ctx.Err()` if context was canceled while waiting/blocking, or finally `ErrPoolClosed` if the pool stopped or was never started.
+- Resize the pool
+    ```
+    err = pool.Resize(size)
+    ```
+    Will live change the size of the pool, If new size is larger, waiting job enqueues from another goroutines will be unblocked to fit the new size, and if new size is smaller, any new enqueues will block until the current size of the pool is less than the new one.
+- Stop the pool
+    ```
+    pool.Stop()
+    ```
+    - ALL Blocked/Waiting jobs will return immediately.
+
+    - Stop() WILL Block until all running jobs is done.
+
+- Different types of Enqueues
+    - `Enqueue(ctx, job)`          returns ONCE the job has started executing (not after job finishes/return)
+
+    - `EnqueueAndWait(ctx, job)`   returns ONCE the job has started **and** finished executing.
+
+    - `TryEnqueue(job)`            will not block if the pool is full, returns `true` ONCE the job has started executing and `false` if pool is full.
+
+    - `TryEnqueueAndWait(job)`     will not block if the pool is full, returns `true` ONCE the job has started **and** finished executing. and `false` if pool is full.
+
+
+------------------------------------------------------
 
 ## Benchmarks
 
@@ -86,6 +128,8 @@ ok      github.com/sherifabdlnaby/gpool 42.110s
 
 **BenchmarkBulkJobs_OverLimit/PoolSize[S]BulkJobs[J]**    = Enqueue `J` Jobs In Pool of size `S` at a time where `J` > `S`
 
+
+------------------------------------------------------
 
 ## Examples
 
