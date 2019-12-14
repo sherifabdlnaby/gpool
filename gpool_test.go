@@ -17,44 +17,26 @@ func TestPool_Start(t *testing.T) {
 	// Test sizes for  < 0, 0 and > 0 size.
 	for size := -1; size <= 2; size++ {
 		t.Run(fmt.Sprintf("Size[%d]", size), func(t *testing.T) {
-			pool, err := gpool.NewPool(size)
 
-			if size < 1 && err == nil {
-				t.Errorf("pool construction succeeded with invalid size")
-			}
-
-			if size < 1 && err != nil {
-				if err != gpool.ErrPoolInvalidSize {
-					t.Errorf("pool construction failed but returned incorrect error")
+			defer func() {
+				if r := recover(); r != nil {
+					if size >= 0 {
+						t.Errorf("pool construction failed with valid size > 0")
+					}
 				}
-				return
-			}
+			}()
 
-			if size >= 1 && err != nil {
-				t.Errorf("pool construction failed, error: %s", err)
+			pool := gpool.NewPool(size)
+
+			if size < 0 {
+				t.Errorf("pool construction succeeded with invalid size")
 			}
 
 			/// Send Work before Worker Start
 			Err := pool.Enqueue(context.TODO(), func() {})
 
-			if Err == nil {
-				t.Error("Pool Enqueued a Job before pool starts.")
-			}
-
-			if Err != gpool.ErrPoolClosed {
-				t.Error("Pool Sent an incorrect error type")
-			}
-
 			/// Send Work before Worker Start with wait
 			Err = pool.EnqueueAndWait(context.TODO(), func() {})
-
-			if Err == nil {
-				t.Error("Pool Enqueued a Job before pool starts.")
-			}
-
-			if Err != gpool.ErrPoolClosed {
-				t.Error("Pool Sent an incorrect error type")
-			}
 
 			/// Start Pool
 			pool.Start()
@@ -74,7 +56,7 @@ func TestPool_Start(t *testing.T) {
 
 func TestPool_Stop(t *testing.T) {
 
-	pool, _ := gpool.NewPool(10)
+	pool := gpool.NewPool(10)
 
 	/// Start Worker
 	pool.Start()
@@ -84,21 +66,33 @@ func TestPool_Stop(t *testing.T) {
 	pool.Stop()
 
 	x := make(chan int)
-	Err := pool.Enqueue(context.TODO(), func() {
+	err := pool.Enqueue(context.TODO(), func() {
 		x <- 123
 	})
 
-	if Err == nil {
+	if err == nil {
 		t.Errorf("Accepted Job after Stopping the pool")
 	}
-	if Err != gpool.ErrPoolClosed {
+	if err != gpool.ErrPoolClosed {
+		t.Errorf("Returned Incorrect Error after sending job to stopped pool")
+	}
+
+	x = make(chan int, 1)
+	err = pool.EnqueueAndWait(context.TODO(), func() {
+		x <- 123
+	})
+
+	if err == nil {
+		t.Errorf("Accepted Job after Stopping the pool")
+	}
+	if err != gpool.ErrPoolClosed {
 		t.Errorf("Returned Incorrect Error after sending job to stopped pool")
 	}
 }
 
 func TestPool_Restart(t *testing.T) {
 
-	pool, _ := gpool.NewPool(1)
+	pool := gpool.NewPool(1)
 	/// Start Worker
 	pool.Start()
 
@@ -122,7 +116,7 @@ func TestPool_Restart(t *testing.T) {
 
 func TestPool_Enqueue(t *testing.T) {
 
-	pool, _ := gpool.NewPool(2)
+	pool := gpool.NewPool(2)
 	// Start Worker
 	pool.Start()
 
@@ -145,7 +139,7 @@ func TestPool_Enqueue(t *testing.T) {
 
 func TestPool_EnqueueAndWait(t *testing.T) {
 
-	pool, _ := gpool.NewPool(2)
+	pool := gpool.NewPool(2)
 	// Start Worker
 	pool.Start()
 
@@ -179,7 +173,7 @@ func TestPool_EnqueueAndWait(t *testing.T) {
 
 func TestPool_EnqueueBlocking(t *testing.T) {
 
-	pool, _ := gpool.NewPool(2)
+	pool := gpool.NewPool(2)
 
 	// Create Context
 	ctx := context.TODO()
@@ -245,7 +239,7 @@ func TestPool_EnqueueBlocking(t *testing.T) {
 
 func TestPool_EnqueueAndWaitBlocking(t *testing.T) {
 
-	pool, _ := gpool.NewPool(1)
+	pool := gpool.NewPool(1)
 
 	// Create Context
 	ctx := context.TODO()
@@ -272,7 +266,7 @@ func TestPool_EnqueueAndWaitBlocking(t *testing.T) {
 
 func TestPool_TryEnqueue(t *testing.T) {
 
-	pool, _ := gpool.NewPool(2)
+	pool := gpool.NewPool(2)
 	x := make(chan int, 1)
 
 	/// Start Worker
@@ -318,7 +312,7 @@ func TestPool_TryEnqueue(t *testing.T) {
 
 func TestSemaphorePool_TryEnqueueAndWait(t *testing.T) {
 
-	pool, _ := gpool.NewPool(2)
+	pool := gpool.NewPool(2)
 	x := make(chan int, 1)
 
 	/// Start Worker
@@ -375,20 +369,20 @@ func TestSemaphorePool_TryEnqueueAndWait(t *testing.T) {
 func TestPool_GetSize(t *testing.T) {
 
 	size := 10
-	pool, _ := gpool.NewPool(size)
+	pool := gpool.NewPool(size)
 	pool.Start()
 	if pool.GetSize() != size {
 		t.Errorf("GetSize() returned incorrect size")
 	}
 
 	size = 5
-	_ = pool.Resize(size)
+	pool.Resize(size)
 	if pool.GetSize() != size {
 		t.Errorf("GetSize() returned incorrect size")
 	}
 
 	size = 15
-	_ = pool.Resize(size)
+	pool.Resize(size)
 	if pool.GetSize() != size {
 		t.Errorf("GetSize() returned incorrect size")
 	}
@@ -396,34 +390,36 @@ func TestPool_GetSize(t *testing.T) {
 
 func TestPool_Resize(t *testing.T) {
 	size := 10
-	pool, _ := gpool.NewPool(size)
+	pool := gpool.NewPool(size)
+
+	defer func() {
+		if r := recover(); r != nil {
+			if size >= 0 {
+				t.Errorf("pool resize failed with valid size > 0 %s", r)
+			}
+		}
+	}()
 
 	// resize to new size
 	size = 0
-	err := pool.Resize(size)
-	if err == nil {
-		t.Errorf("Resize to invalid size didn't return error!")
-	}
-	if err != gpool.ErrPoolInvalidSize {
-		t.Errorf("Resize to invalid size returned wrong error!")
-	}
+	pool.Resize(size)
 
 	size = 15
-	err = pool.Resize(size)
-	if err != nil {
-		t.Errorf("Resize failed error: %v", err.Error())
-	}
+	pool.Resize(size)
 
 	pool.Start()
 
 	if pool.GetSize() != size {
 		t.Errorf("resize didn't return correct size")
 	}
+
+	size = -1
+	pool.Resize(size)
 }
 
 func TestPool_PositiveResizeLive(t *testing.T) {
 	size := 2
-	pool, _ := gpool.NewPool(size)
+	pool := gpool.NewPool(size)
 	pool.Start()
 
 	// Create Context
@@ -450,7 +446,7 @@ func TestPool_PositiveResizeLive(t *testing.T) {
 		t.Error("Job Finished BEFORE jobs that should have been blocking this job.")
 	default:
 		// job C is blocked, now resize should unblock it.
-		_ = pool.Resize(pool.GetSize() + 1)
+		pool.Resize(pool.GetSize() + 1)
 
 		select {
 		case <-c:
@@ -467,7 +463,7 @@ func TestPool_PositiveResizeLive(t *testing.T) {
 func TestPool_NegativeResizeLive(t *testing.T) {
 
 	size := 3
-	pool, _ := gpool.NewPool(size)
+	pool := gpool.NewPool(size)
 	pool.Start()
 
 	// Create Context
@@ -483,7 +479,7 @@ func TestPool_NegativeResizeLive(t *testing.T) {
 	_ = pool.Enqueue(ctx, func() { a <- 123 })
 	_ = pool.Enqueue(ctx, func() { b <- 123 })
 
-	_ = pool.Resize(pool.GetSize() - 1)
+	pool.Resize(pool.GetSize() - 1)
 
 	// Now this should block
 	go func() {
@@ -506,7 +502,7 @@ func TestPool_NegativeResizeLive(t *testing.T) {
 func TestPool_Getters(t *testing.T) {
 
 	size := 2
-	pool, _ := gpool.NewPool(size)
+	pool := gpool.NewPool(size)
 	pool.Start()
 
 	if pool.GetSize() != size {
@@ -559,7 +555,7 @@ func BenchmarkThroughput(b *testing.B) {
 	var workersCountValues = []int{10, 100, 1000, 10000}
 	for _, workercount := range workersCountValues {
 		b.Run(fmt.Sprintf("PoolSize[%d]", workercount), func(b *testing.B) {
-			pool, _ := gpool.NewPool(workercount)
+			pool := gpool.NewPool(workercount)
 
 			pool.Start()
 
@@ -584,7 +580,7 @@ func BenchmarkBulkJobs_UnderLimit(b *testing.B) {
 	for _, workercount := range workersCountValues {
 		for _, work := range workAmountValues {
 			b.Run(fmt.Sprintf("PoolSize[%d]BulkJobs[%d]", workercount, work), func(b *testing.B) {
-				pool, _ := gpool.NewPool(workercount)
+				pool := gpool.NewPool(workercount)
 				pool.Start()
 				b.ResetTimer()
 
@@ -614,7 +610,7 @@ func BenchmarkBulkJobs_OverLimit(b *testing.B) {
 	for _, workercount := range workersCountValues {
 		for _, work := range workAmountValues {
 			b.Run(fmt.Sprintf("PoolSize[%d]BulkJobs[%d]", workercount, work), func(b *testing.B) {
-				pool, _ := gpool.NewPool(workercount)
+				pool := gpool.NewPool(workercount)
 				pool.Start()
 				b.ResetTimer()
 
@@ -646,13 +642,7 @@ func Example_one() {
 	concurrency := 2
 
 	// Create and start pool.
-	pool, err := gpool.NewPool(concurrency)
-
-	if err != nil {
-		panic(err)
-	}
-
-	pool.Start()
+	pool := gpool.NewPool(concurrency)
 
 	defer pool.Stop()
 
@@ -682,13 +672,7 @@ func Example_two() {
 	concurrency := 2
 
 	// Create and start pool.
-	pool, err := gpool.NewPool(concurrency)
-
-	if err != nil {
-		panic(err)
-	}
-
-	pool.Start()
+	pool := gpool.NewPool(concurrency)
 
 	defer pool.Stop()
 
@@ -720,15 +704,7 @@ func Example_two() {
 // Example 3 - Enqueue 10 Jobs and Stop pool mid-processing.
 func Example_three() {
 	// Create and start pool.
-	pool, err := gpool.NewPool(2)
-
-	if err != nil {
-		panic(err)
-	}
-
-	log.Println("Starting Pool...")
-
-	pool.Start()
+	pool := gpool.NewPool(2)
 	defer pool.Stop()
 
 	ctx, cancel := context.WithCancel(context.Background())

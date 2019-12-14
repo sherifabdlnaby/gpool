@@ -37,7 +37,6 @@ func NewPool(size int) *Pool {
 
 	if size < 0 {
 		panic(ErrPoolInvalidSize)
-		return nil
 	}
 
 	// If size is zero, set default == no. of cpus
@@ -103,7 +102,7 @@ func (w *Pool) Stop() {
 //
 //  `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is resized, in case of shrinking the pool `resize` will not affect any already processing job.
 func (w *Pool) Resize(newSize int) {
-	if newSize < 1 {
+	if newSize < 0 {
 		panic(ErrPoolInvalidSize)
 	}
 
