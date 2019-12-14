@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"runtime"
 	"sync"
 
 	"github.com/sherifabdlnaby/semaphore"
@@ -11,7 +12,7 @@ import (
 
 var (
 	// ErrPoolInvalidSize Returned if the Size of pool < 1.
-	ErrPoolInvalidSize = errors.New("pool size is invalid, pool size must be > 0")
+	ErrPoolInvalidSize = errors.New("pool size is invalid, pool size must be >= 0")
 
 	// ErrPoolClosed Error Returned if the Pool has not pool_started yet, or was stopped.
 	ErrPoolClosed = errors.New("pool is closed")
@@ -34,9 +35,14 @@ type Pool struct {
 // Returns ErrPoolInvalidSize if size is < 1.
 func NewPool(size int) *Pool {
 
-	if size < 1 {
+	if size < 0 {
 		panic(ErrPoolInvalidSize)
 		return nil
+	}
+
+	// If size is zero, set default == no. of cpus
+	if size == 0 {
+		size = runtime.NumCPU()
 	}
 
 	newWorkerPool := Pool{
@@ -46,6 +52,7 @@ func NewPool(size int) *Pool {
 		status:      poolStopped,
 	}
 
+	// start pool.
 	newWorkerPool.Start()
 
 	return &newWorkerPool
@@ -100,6 +107,11 @@ func (w *Pool) Resize(newSize int) {
 		panic(ErrPoolInvalidSize)
 	}
 
+	// If newSize is zero, set default == no. of cpus
+	if newSize == 0 {
+		newSize = runtime.NumCPU()
+	}
+
 	// Resize
 	w.mu.Lock()
 
@@ -107,7 +119,7 @@ func (w *Pool) Resize(newSize int) {
 
 	// If already pool_started live resize semaphore limit.
 	if w.status == poolStarted {
-		w.semaphore.Resize(int64(newSize))
+		w.semaphore.Resize(int64(w.workerCount))
 	}
 
 	w.mu.Unlock()
