@@ -18,7 +18,7 @@ var (
 )
 
 const (
-	poolClosed = iota
+	poolStopped = iota
 	poolStarted
 )
 
@@ -32,20 +32,23 @@ type Pool struct {
 
 // NewPool returns a pool that uses semaphore implementation.
 // Returns ErrPoolInvalidSize if size is < 1.
-func NewPool(size int) (*Pool, error) {
+func NewPool(size int) *Pool {
 
 	if size < 1 {
-		return nil, ErrPoolInvalidSize
+		panic(ErrPoolInvalidSize)
+		return nil
 	}
 
 	newWorkerPool := Pool{
 		workerCount: size,
 		semaphore:   semaphore.NewWeighted(math.MaxInt64),
 		mu:          sync.Mutex{},
-		status:      poolClosed,
+		status:      poolStopped,
 	}
 
-	return &newWorkerPool, nil
+	newWorkerPool.Start()
+
+	return &newWorkerPool
 }
 
 // Start the Pool, otherwise it will not accept any job.
@@ -73,7 +76,7 @@ func (w *Pool) Stop() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.status == poolClosed {
+	if w.status == poolStopped {
 		return
 	}
 
@@ -81,7 +84,7 @@ func (w *Pool) Stop() {
 	// And also plays as a lock to change pool status.
 	_ = w.semaphore.Acquire(context.Background(), int64(w.workerCount))
 
-	w.status = poolClosed
+	w.status = poolStopped
 
 	// Release the Semaphore so that subsequent enqueues will not block and return ErrPoolClosed.
 	w.semaphore.Release(int64(w.workerCount))
@@ -92,9 +95,9 @@ func (w *Pool) Stop() {
 // Resize the pool size in concurrent-safe way.
 //
 //  `Resize` can enlarge the pool and any blocked enqueue will unblock after pool is resized, in case of shrinking the pool `resize` will not affect any already processing job.
-func (w *Pool) Resize(newSize int) error {
+func (w *Pool) Resize(newSize int) {
 	if newSize < 1 {
-		return ErrPoolInvalidSize
+		panic(ErrPoolInvalidSize)
 	}
 
 	// Resize
@@ -108,8 +111,6 @@ func (w *Pool) Resize(newSize int) error {
 	}
 
 	w.mu.Unlock()
-
-	return nil
 }
 
 // Enqueue Process job `func(){...}` and returns ONCE the func has started executing (not after it ends/return)
