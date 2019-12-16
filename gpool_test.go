@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -73,7 +74,7 @@ func TestPool_Stop(t *testing.T) {
 	if err == nil {
 		t.Errorf("Accepted Job after Stopping the pool")
 	}
-	if err != gpool.ErrPoolClosed {
+	if err != gpool.ErrPoolStopped {
 		t.Errorf("Returned Incorrect Error after sending job to stopped pool")
 	}
 
@@ -85,7 +86,7 @@ func TestPool_Stop(t *testing.T) {
 	if err == nil {
 		t.Errorf("Accepted Job after Stopping the pool")
 	}
-	if err != gpool.ErrPoolClosed {
+	if err != gpool.ErrPoolStopped {
 		t.Errorf("Returned Incorrect Error after sending job to stopped pool")
 	}
 }
@@ -552,7 +553,7 @@ func TestPool_Getters(t *testing.T) {
 // ------------ Benchmarking ------------
 
 func BenchmarkThroughput(b *testing.B) {
-	var workersCountValues = []int{10, 100, 1000, 10000}
+	var workersCountValues = []int{runtime.GOMAXPROCS(0), 10, 100, 1000}
 	for _, workercount := range workersCountValues {
 		b.Run(fmt.Sprintf("PoolSize[%d]", workercount), func(b *testing.B) {
 			pool := gpool.NewPool(workercount)
@@ -574,54 +575,20 @@ func BenchmarkThroughput(b *testing.B) {
 }
 
 func BenchmarkBulkJobs_UnderLimit(b *testing.B) {
-	var workersCountValues = []int{10000}
-	var workAmountValues = []int{100, 1000, 10000}
+	var workersCountValues = []int{runtime.GOMAXPROCS(0), 10, 100, 1000, 10000}
+	var workAmountValues = []int{runtime.GOMAXPROCS(0), 100, 1000}
 
 	for _, workercount := range workersCountValues {
 		for _, work := range workAmountValues {
 			b.Run(fmt.Sprintf("PoolSize[%d]BulkJobs[%d]", workercount, work), func(b *testing.B) {
 				pool := gpool.NewPool(workercount)
-				pool.Start()
 				b.ResetTimer()
-
 				for i2 := 0; i2 < b.N; i2++ {
 					wg := sync.WaitGroup{}
 					wg.Add(work)
 					for i3 := 0; i3 < work; i3++ {
-						go func() {
-							_ = pool.Enqueue(context.TODO(), func() {})
-							wg.Done()
-						}()
-					}
-					wg.Wait()
-				}
-
-				b.StopTimer()
-				pool.Stop()
-			})
-		}
-	}
-}
-
-func BenchmarkBulkJobs_OverLimit(b *testing.B) {
-	var workersCountValues = []int{100, 1000}
-	var workAmountValues = []int{1000, 10000}
-
-	for _, workercount := range workersCountValues {
-		for _, work := range workAmountValues {
-			b.Run(fmt.Sprintf("PoolSize[%d]BulkJobs[%d]", workercount, work), func(b *testing.B) {
-				pool := gpool.NewPool(workercount)
-				pool.Start()
-				b.ResetTimer()
-
-				for i2 := 0; i2 < b.N; i2++ {
-					wg := sync.WaitGroup{}
-					wg.Add(work)
-					for i3 := 0; i3 < work; i3++ {
-						go func() {
-							_ = pool.Enqueue(context.TODO(), func() {})
-							wg.Done()
-						}()
+						_ = pool.Enqueue(context.TODO(), func() {})
+						wg.Done()
 					}
 					wg.Wait()
 				}
