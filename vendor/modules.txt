@@ -1,0 +1,2 @@
+# github.com/sherifabdlnaby/semaphore v1.1.0
+github.com/sherifabdlnaby/semaphore
