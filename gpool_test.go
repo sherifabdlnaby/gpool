@@ -18,7 +18,6 @@ func TestPool_Start(t *testing.T) {
 	// Test sizes for  < 0, 0 and > 0 size.
 	for size := -1; size <= 2; size++ {
 		t.Run(fmt.Sprintf("Size[%d]", size), func(t *testing.T) {
-
 			defer func() {
 				if r := recover(); r != nil {
 					if size >= 0 {
@@ -34,10 +33,10 @@ func TestPool_Start(t *testing.T) {
 			}
 
 			/// Send Work before Worker Start
-			Err := pool.Enqueue(context.TODO(), func() {})
+			_ = pool.Enqueue(context.TODO(), func() {})
 
 			/// Send Work before Worker Start with wait
-			Err = pool.EnqueueAndWait(context.TODO(), func() {})
+			_ = pool.EnqueueAndWait(context.TODO(), func() {})
 
 			/// Start Pool
 			pool.Start()
@@ -46,7 +45,7 @@ func TestPool_Start(t *testing.T) {
 			pool.Start()
 
 			// Enqueue a Job
-			Err = pool.Enqueue(context.TODO(), func() {})
+			Err := pool.Enqueue(context.TODO(), func() {})
 
 			if Err != nil {
 				t.Errorf("Pool Enqueued Errored after Start. Error: %s", Err.Error())
@@ -56,7 +55,6 @@ func TestPool_Start(t *testing.T) {
 }
 
 func TestPool_Stop(t *testing.T) {
-
 	pool := gpool.NewPool(10)
 
 	/// Start Worker
@@ -92,7 +90,6 @@ func TestPool_Stop(t *testing.T) {
 }
 
 func TestPool_Restart(t *testing.T) {
-
 	pool := gpool.NewPool(1)
 	/// Start Worker
 	pool.Start()
@@ -116,7 +113,6 @@ func TestPool_Restart(t *testing.T) {
 }
 
 func TestPool_Enqueue(t *testing.T) {
-
 	pool := gpool.NewPool(2)
 	// Start Worker
 	pool.Start()
@@ -139,7 +135,6 @@ func TestPool_Enqueue(t *testing.T) {
 }
 
 func TestPool_EnqueueAndWait(t *testing.T) {
-
 	pool := gpool.NewPool(2)
 	// Start Worker
 	pool.Start()
@@ -173,7 +168,6 @@ func TestPool_EnqueueAndWait(t *testing.T) {
 }
 
 func TestPool_EnqueueBlocking(t *testing.T) {
-
 	pool := gpool.NewPool(2)
 
 	// Create Context
@@ -239,7 +233,6 @@ func TestPool_EnqueueBlocking(t *testing.T) {
 }
 
 func TestPool_EnqueueAndWaitBlocking(t *testing.T) {
-
 	pool := gpool.NewPool(1)
 
 	// Create Context
@@ -262,11 +255,9 @@ func TestPool_EnqueueAndWaitBlocking(t *testing.T) {
 	if Err1 == nil {
 		t.Error("Didn't Return Error in a waiting & canceled job")
 	}
-
 }
 
 func TestPool_TryEnqueue(t *testing.T) {
-
 	pool := gpool.NewPool(2)
 	x := make(chan int, 1)
 
@@ -312,7 +303,6 @@ func TestPool_TryEnqueue(t *testing.T) {
 }
 
 func TestSemaphorePool_TryEnqueueAndWait(t *testing.T) {
-
 	pool := gpool.NewPool(2)
 	x := make(chan int, 1)
 
@@ -368,7 +358,6 @@ func TestSemaphorePool_TryEnqueueAndWait(t *testing.T) {
 }
 
 func TestPool_GetSize(t *testing.T) {
-
 	size := 10
 	pool := gpool.NewPool(size)
 	pool.Start()
@@ -462,7 +451,6 @@ func TestPool_PositiveResizeLive(t *testing.T) {
 }
 
 func TestPool_NegativeResizeLive(t *testing.T) {
-
 	size := 3
 	pool := gpool.NewPool(size)
 	pool.Start()
@@ -501,7 +489,6 @@ func TestPool_NegativeResizeLive(t *testing.T) {
 }
 
 func TestPool_Getters(t *testing.T) {
-
 	size := 2
 	pool := gpool.NewPool(size)
 	pool.Start()
@@ -553,7 +540,7 @@ func TestPool_Getters(t *testing.T) {
 // ------------ Benchmarking ------------
 
 func BenchmarkThroughput(b *testing.B) {
-	var workersCountValues = []int{runtime.GOMAXPROCS(0), 10, 100, 1000}
+	workersCountValues := []int{runtime.GOMAXPROCS(0), 10, 100, 1000}
 	for _, workercount := range workersCountValues {
 		b.Run(fmt.Sprintf("PoolSize[%d]", workercount), func(b *testing.B) {
 			pool := gpool.NewPool(workercount)
@@ -575,8 +562,8 @@ func BenchmarkThroughput(b *testing.B) {
 }
 
 func BenchmarkBulkJobs_UnderLimit(b *testing.B) {
-	var workersCountValues = []int{runtime.GOMAXPROCS(0), 10, 100, 1000, 10000}
-	var workAmountValues = []int{runtime.GOMAXPROCS(0), 100, 1000}
+	workersCountValues := []int{runtime.GOMAXPROCS(0), 10, 100, 1000, 10000}
+	workAmountValues := []int{runtime.GOMAXPROCS(0), 100, 1000}
 
 	for _, workercount := range workersCountValues {
 		for _, work := range workAmountValues {
@@ -692,7 +679,6 @@ func Example_three() {
 					time.Sleep(2000 * time.Millisecond)
 					x <- i
 				})
-
 				if err != nil {
 					log.Printf("Job [%v] was not enqueued. [%s]", i, err.Error())
 					return
@@ -700,14 +686,14 @@ func Example_three() {
 
 				log.Printf("Job [%v] Enqueue-ed ", i)
 
-				log.Printf("Job [%v] Receieved, Result: [%v]", i, <-x)
+				log.Printf("Job [%v] Received, Result: [%v]", i, <-x)
 			}(i)
 		}
 	}()
 
 	// Uncomment to demonstrate ctx cancel of jobs.
-	//time.Sleep(100 * time.Millisecond)
-	//cancel()
+	// time.Sleep(100 * time.Millisecond)
+	// cancel()
 
 	time.Sleep(5000 * time.Millisecond)
 
