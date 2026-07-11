@@ -12,8 +12,10 @@ local commonIgnores =
 
 // Linters defined once, shared by the hooks below.
 local linters: Mapping<String, Step> = new Mapping<String, Step> {
-  // Go
-  ["go_fumpt"] = Builtins.go_fumpt
+  // Go — go_fumpt's builtin only ships `fix`; add `check_diff` so CI/`hk check` actually gate formatting.
+  ["go_fumpt"] = (Builtins.go_fumpt) {
+    check_diff = "gofumpt -d {{ files }}"
+  }
   ["golangci_lint"] = Builtins.golangci_lint
   ["gomod_tidy"] = Builtins.gomod_tidy
 
