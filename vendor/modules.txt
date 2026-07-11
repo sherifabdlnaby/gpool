@@ -1,2 +1,5 @@
 # github.com/sherifabdlnaby/semaphore v1.1.0
+## explicit
 github.com/sherifabdlnaby/semaphore
+# golang.org/x/sync v0.22.0
+## explicit; go 1.25.0

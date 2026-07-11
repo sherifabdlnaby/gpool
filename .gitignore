@@ -87,3 +87,7 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.lnk
+
+# mise
+mise.local.toml
+.mise/setup

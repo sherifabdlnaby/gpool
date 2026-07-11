@@ -1,29 +1,62 @@
-# gpool - a generic context-aware resizable goroutines pool to bound concurrency.
-
+# gpool - a generic context-aware resizable goroutines pool to bound concurrency
 
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go#goroutines)
 <a>
-  <img src="https://img.shields.io/github/v/tag/sherifabdlnaby/gpool?label=release&amp;sort=semver">
+  <img src="https://img.shields.io/github/v/tag/sherifabdlnaby/gpool?label=release&amp;sort=semver" alt="release">
 </a>
-[![](https://godoc.org/github.com/sherifabdlnaby/gpool?status.svg)](http://godoc.org/github.com/sherifabdlnaby/gpool)
+[![GoDoc](https://godoc.org/github.com/sherifabdlnaby/gpool?status.svg)](http://godoc.org/github.com/sherifabdlnaby/gpool)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sherifabdlnaby/gpool)](https://goreportcard.com/report/github.com/sherifabdlnaby/gpool)
-[![Build Status](https://travis-ci.org/sherifabdlnaby/gpool.svg?branch=func)](https://travis-ci.org/sherifabdlnaby/gpool)
-[![codecov](https://codecov.io/gh/sherifabdlnaby/gpool/branch/func/graph/badge.svg)](https://codecov.io/gh/sherifabdlnaby/gpool)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/SherifAbdlNaby/gpool/blob/master/LICENSE)
+[![CI](https://github.com/sherifabdlnaby/gpool/actions/workflows/test.yml/badge.svg)](https://github.com/sherifabdlnaby/gpool/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/sherifabdlnaby/gpool/branch/master/graph/badge.svg)](https://codecov.io/gh/sherifabdlnaby/gpool)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/sherifabdlnaby/gpool/blob/master/LICENSE)
 
 ## Installation
+
 ``` bash
-$ go get github.com/sherifabdlnaby/gpool
+go get github.com/sherifabdlnaby/gpool
 ```
+
 ``` go
 import "github.com/sherifabdlnaby/gpool"
 ```
+
+## Development
+
+This repo uses [**mise**](https://mise.jdx.dev) to pin tools (Go, linters), expose tasks, and wire git hooks.
+
+<details>
+<summary><b>Install mise (first time on this machine)</b></summary>
+
+```sh
+brew install mise          # or: curl https://mise.run | sh
+echo 'eval "$(mise activate zsh)"' >> ~/.zshrc   # bash: mise activate bash >> ~/.bashrc
+mise doctor                # confirm the install is healthy
+```
+
+See the [installation docs](https://mise.jdx.dev/installing-mise.html) for other platforms.
+
+</details>
+
+From the repo root:
+
+```sh
+mise trust      # allow this repo's mise config to load
+mise run setup  # install pinned tools + module deps (git hooks self-install via mise)
+```
+
+| Command                                  | What it does                                                          |
+| ---------------------------------------- | --------------------------------------------------------------------- |
+| `mise run check` (alias `mise run lint`) | Run all linters, formatters, and validators. Add `--fix` to auto-fix. |
+| `mise run test`                          | Run Go tests with the race detector.                                  |
+| `mise tasks`                             | List every available task.                                            |
+
+Run `mise run <task> --help` for a task's options. On **commit**, [hk](https://hk.jdx.dev) formats and lints staged files — the same `check` that runs in CI. Skip for a WIP commit with `git commit --no-verify`.
 
 ## Introduction
 
 Easily manages a resizeable pool of context aware goroutines to bound concurrency, A **`Job`** is **Enqueued** to the pool and only **`N`** jobs can be processing concurrently at the same time.
 
-- A Job is simply a `func(){}`,  when you `Enqueue(..)` a job, the enqueue call will return *ONCE* the job has **started** processing. Otherwise if the pool is full it will **block** until:
+- A Job is simply a `func(){}`, when you `Enqueue(..)` a job, the enqueue call will return *ONCE* the job has **started** processing. Otherwise if the pool is full it will **block** until:
   1. pool has room for the job.
   2. job's `context` is canceled.
   3. the pool is stopped.
@@ -36,18 +69,21 @@ Easily manages a resizeable pool of context aware goroutines to bound concurrenc
 
 - `Start`, `Stop`, and `Resize(N)` are all concurrent safe and can be called from multiple goroutines, subsequent calls of Start or Stop has no effect unless called interchangeably.
 
-further documentation at : [![](https://godoc.org/github.com/sherifabdlnaby/gpool?status.svg)](http://godoc.org/github.com/sherifabdlnaby/gpool)
+further documentation at : [![GoDoc](https://godoc.org/github.com/sherifabdlnaby/gpool?status.svg)](http://godoc.org/github.com/sherifabdlnaby/gpool)
 
 ------------------------------------------------------
 
 ## Usage
 
 - Create new pool
-    ```
+
+    ```text
     pool, err := gpool.NewPool(concurrency)
     ```
+
 - Enqueue a job
-    ```
+
+    ```text
         job := func() {
             time.Sleep(2000 * time.Millisecond)
             fmt.Println("did some work")
@@ -56,39 +92,42 @@ further documentation at : [![](https://godoc.org/github.com/sherifabdlnaby/gpoo
         // Enqueue Job
         err := pool.Enqueue(ctx, job)
     ```
-    A call to `pool.Enqueue()` will return `nil` if `job` started processing, blocks if the pool is full, `ctx.Err()` if context was canceled while waiting/blocking, or finally `ErrPoolClosed` if the pool stopped or was never started.
+
+  A call to `pool.Enqueue()` will return `nil` if `job` started processing, blocks if the pool is full, `ctx.Err()` if context was canceled while waiting/blocking, or finally `ErrPoolClosed` if the pool stopped or was never started.
 - Resize the pool
-    ```
+
+    ```text
     err = pool.Resize(size)
     ```
-    Will live change the size of the pool, If new size is larger, waiting job enqueues from another goroutines will be unblocked to fit the new size, and if new size is smaller, any new enqueues will block until the current size of the pool is less than the new one.
+
+  Will live change the size of the pool, If new size is larger, waiting job enqueues from another goroutines will be unblocked to fit the new size, and if new size is smaller, any new enqueues will block until the current size of the pool is less than the new one.
 - Stop the pool
-    ```
+
+    ```text
     pool.Stop()
     ```
-    - ALL Blocked/Waiting jobs will return immediately.
 
-    - Stop() WILL Block until all running jobs is done.
+  - ALL Blocked/Waiting jobs will return immediately.
 
+  - Stop() WILL Block until all running jobs is done.
 - Different types of "Enqueues"
-    - `Enqueue(ctx, job)`          returns ONCE the job has started executing (not after job finishes/return)
+  - `Enqueue(ctx, job)` returns ONCE the job has started executing (not after job finishes/return)
 
-    - `EnqueueAndWait(ctx, job)`   returns ONCE the job has started **and** finished executing.
+  - `EnqueueAndWait(ctx, job)` returns ONCE the job has started **and** finished executing.
 
-    - `TryEnqueue(job)`            will not block if the pool is full, returns `true` ONCE the job has started executing and `false` if pool is full.
+  - `TryEnqueue(job)`            will not block if the pool is full, returns `true` ONCE the job has started executing and `false` if pool is full.
 
-    - `TryEnqueueAndWait(job)`     will not block if the pool is full, returns `true` ONCE the job has started **and** finished executing. and `false` if pool is full.
-
+  - `TryEnqueueAndWait(job)` will not block if the pool is full, returns `true` ONCE the job has started **and** finished executing. and `false` if pool is full.
 
 ------------------------------------------------------
 
 ## Benchmarks
 
 ``` bash
-$ go test -bench=. -cpu=2 -benchmem
+go test -bench=. -cpu=2 -benchmem
 ```
 
-```
+```text
 go test -bench=. -cpu=2 -benchmem
 goos: darwin
 goarch: amd64
@@ -114,17 +153,16 @@ BenchmarkBulkJobs_UnderLimit/PoolSize[10000]BulkJobs[100]-2        42238        
 BenchmarkBulkJobs_UnderLimit/PoolSize[10000]BulkJobs[1000]-2        4171            283981 ns/op              29 B/op          1 allocs/op
 ```
 
-
 **BenchmarkOneThroughput/PoolSize[S]**                    = Enqueue Async Jobs ( Will not wait for result ) in a Pool of size = `S`
 
-**BenchmarkBulkJobs/PoolSize[S]BulkJobs[J]**              = Enqueue `J` Jobs In Pool of size `S` at a time where `J` < `S`
-
+**BenchmarkBulkJobs/PoolSize[S]BulkJobs[J]** = Enqueue `J` Jobs In Pool of size `S` at a time where `J` < `S`
 
 ------------------------------------------------------
 
 ## Examples
 
 ### Example 1 - Simple Job Enqueue
+
 ```go
 func main() {
     concurrency := 2
@@ -152,9 +190,11 @@ func main() {
     log.Printf("Job Done, Received: %v", <-resultChan1)
 }
 ```
-----------
+
+------------------------------------------------------
 
 ### Example 2 - Enqueue A Job with Timeout
+
 ```go
 
 func main() {
@@ -190,9 +230,10 @@ func main() {
 }
 ```
 
-----------
+------------------------------------------------------
 
 ### Example 3
+
 ``` go
 // size Workers / Concurrent jobs of the Pool
 const concurrency = 2
@@ -227,7 +268,7 @@ func main() {
 
         log.Printf("Job [%v] Enqueue-ed ", i)
 
-        log.Printf("Job [%v] Receieved, Result: [%v]", i, <-x)
+        log.Printf("Job [%v] Received, Result: [%v]", i, <-x)
       }(i)
     }
   }()
@@ -249,44 +290,47 @@ func main() {
   time.Sleep(4000 * time.Millisecond)
 }
 ```
+
 #### Output
-```
+
+```text
 2019/01/08 20:15:39 Job [0] Enqueueing
 2019/01/08 20:15:39 Job [0] Enqueue-ed
 2019/01/08 20:15:39 Job [1] Enqueueing
 2019/01/08 20:15:39 Job [1] Enqueue-ed
 2019/01/08 20:15:40 Job [2] Enqueueing
 2019/01/08 20:15:40 Job [3] Enqueueing
-2019/01/08 20:15:41 Job [0] Receieved, Result: [0]
+2019/01/08 20:15:41 Job [0] Received, Result: [0]
 2019/01/08 20:15:41 Job [2] Enqueue-ed
 2019/01/08 20:15:41 Job [4] Enqueueing
 2019/01/08 20:15:41 Job [3] Enqueue-ed
-2019/01/08 20:15:41 Job [1] Receieved, Result: [1]
+2019/01/08 20:15:41 Job [1] Received, Result: [1]
 2019/01/08 20:15:41 Job [5] Enqueueing
 2019/01/08 20:15:42 Job [6] Enqueueing
 2019/01/08 20:15:42 Job [7] Enqueueing
 2019/01/08 20:15:43 Job [4] Enqueue-ed
-2019/01/08 20:15:43 Job [2] Receieved, Result: [2]
+2019/01/08 20:15:43 Job [2] Received, Result: [2]
 2019/01/08 20:15:43 Job [8] Enqueueing
 Stopping...
 2019/01/08 20:15:43 Job [7] was not enqueued. [pool is closed]
 2019/01/08 20:15:43 Job [5] was not enqueued. [pool is closed]
 2019/01/08 20:15:43 Job [6] was not enqueued. [pool is closed]
-2019/01/08 20:15:43 Job [3] Receieved, Result: [3]
+2019/01/08 20:15:43 Job [3] Received, Result: [3]
 2019/01/08 20:15:43 Job [8] was not enqueued. [pool is closed]
 2019/01/08 20:15:43 Job [9] Enqueueing
 Stopped
-2019/01/08 20:15:45 Job [4] Receieved, Result: [4]
+2019/01/08 20:15:45 Job [4] Received, Result: [4]
 Sleeping for couple of seconds so canceled job have a chance to print out their status
 2019/01/08 20:15:45 Job [9] was not enqueued. [pool is closed]
 
 Process finished with exit code 0
 ```
 
-# License
+## License
+
 [MIT License](https://raw.githubusercontent.com/sherifabdlnaby/gpool/blob/master/LICENSE)
 Copyright (c) 2019 Sherif Abdel-Naby
 
-# Contribution
+## Contribution
 
 PR(s) are Open and Welcomed.
