@@ -1,2 +1,4 @@
 github.com/sherifabdlnaby/semaphore v1.1.0 h1:V2fgzQI68fXgV4+y6pAnI/OU5RB61UiQmJ3ys+F8354=
 github.com/sherifabdlnaby/semaphore v1.1.0/go.mod h1:6q3c9bS2amkllnRxGuIHqiXCpe/z/lSJlNvfQb7tCNE=
+golang.org/x/sync v0.22.0 h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek=
+golang.org/x/sync v0.22.0/go.mod h1:9xrNwdLfx4jkKbNva9FpL6vEN7evnE43NNNJQ2LF3+0=
