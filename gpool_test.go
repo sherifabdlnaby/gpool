@@ -89,6 +89,81 @@ func TestPool_Stop(t *testing.T) {
 	}
 }
 
+func TestPool_StoppedSubmissions(t *testing.T) {
+	tests := []struct {
+		name   string
+		submit func(context.Context, *gpool.Pool, func()) error
+	}{
+		{
+			name: "Enqueue",
+			submit: func(ctx context.Context, pool *gpool.Pool, job func()) error {
+				return pool.Enqueue(ctx, job)
+			},
+		},
+		{
+			name: "EnqueueAndWait",
+			submit: func(ctx context.Context, pool *gpool.Pool, job func()) error {
+				return pool.EnqueueAndWait(ctx, job)
+			},
+		},
+		{
+			name: "TryEnqueue",
+			submit: func(_ context.Context, pool *gpool.Pool, job func()) error {
+				if pool.TryEnqueue(job) {
+					return nil
+				}
+				return gpool.ErrPoolStopped
+			},
+		},
+		{
+			name: "TryEnqueueAndWait",
+			submit: func(_ context.Context, pool *gpool.Pool, job func()) error {
+				if pool.TryEnqueueAndWait(job) {
+					return nil
+				}
+				return gpool.ErrPoolStopped
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := gpool.NewPool(1)
+			pool.Stop()
+			ran := make(chan struct{}, 1)
+			job := func() {
+				select {
+				case ran <- struct{}{}:
+				default:
+				}
+			}
+
+			for i := 0; i < 3; i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				err := tt.submit(ctx, pool, job)
+				cancel()
+				if err != gpool.ErrPoolStopped {
+					t.Errorf("submission %d returned %v, want ErrPoolStopped", i, err)
+				}
+				if current := pool.GetCurrent(); current != 0 {
+					t.Errorf("submission %d left %d occupied permits, want 0", i, current)
+				}
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := pool.Enqueue(ctx, job); err != gpool.ErrPoolStopped {
+				t.Errorf("later Enqueue returned %v, want ErrPoolStopped", err)
+			}
+			select {
+			case <-ran:
+				t.Error("stopped pool executed a rejected job")
+			default:
+			}
+		})
+	}
+}
+
 func TestPool_Restart(t *testing.T) {
 	pool := gpool.NewPool(1)
 	/// Start Worker
