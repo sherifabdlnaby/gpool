@@ -134,8 +134,9 @@ func (w *Pool) Resize(newSize int) {
 // @Returns ErrPoolStopped if the pool is not running.
 // @Returns ctx.Err() if the job Enqueued context was canceled before the job could be processed by the pool.
 func (w *Pool) Enqueue(ctx context.Context, job func()) error {
+	sem := w.semaphore
 	// Acquire 1 from semaphore ( aka Acquire one worker )
-	err := w.semaphore.Acquire(ctx, 1)
+	err := sem.Acquire(ctx, 1)
 	// The Job was canceled through job's context, no need to DO the work now.
 	if err != nil {
 		return err
@@ -144,6 +145,7 @@ func (w *Pool) Enqueue(ctx context.Context, job func()) error {
 	// Check if pool is running
 	// (This is safe as the semaphore in stop() will only change status if it acquired the full semaphore.).
 	if w.status != poolStarted {
+		sem.Release(1)
 		return ErrPoolStopped
 	}
 
@@ -152,7 +154,7 @@ func (w *Pool) Enqueue(ctx context.Context, job func()) error {
 		// Run the job
 		job()
 
-		w.semaphore.Release(1)
+		sem.Release(1)
 	}()
 
 	return nil
@@ -170,8 +172,9 @@ func (w *Pool) Enqueue(ctx context.Context, job func()) error {
 // @Returns ErrPoolStopped if the pool is not running.
 // @Returns ctx.Err() if the job Enqueued context was canceled before the job could be processed by the pool.
 func (w *Pool) EnqueueAndWait(ctx context.Context, job func()) error {
+	sem := w.semaphore
 	// Acquire 1 from semaphore ( aka Acquire one worker )
-	err := w.semaphore.Acquire(ctx, 1)
+	err := sem.Acquire(ctx, 1)
 	// The Job was canceled through job's context, no need to DO the work now.
 	if err != nil {
 		return err
@@ -180,22 +183,28 @@ func (w *Pool) EnqueueAndWait(ctx context.Context, job func()) error {
 	// Check if pool is running
 	// (This is safe as the semaphore in stop() will only change status if it acquired the full semaphore.).
 	if w.status != poolStarted {
+		sem.Release(1)
 		return ErrPoolStopped
 	}
 
 	// Run the job
 	job()
 
-	w.semaphore.Release(1)
+	sem.Release(1)
 
 	return nil
 }
 
 // TryEnqueue will not block if the pool is full, will return true once the job has started processing or false if the pool is closed or full.
 func (w *Pool) TryEnqueue(job func()) bool {
+	sem := w.semaphore
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	// False if semaphore is full or status not started.
-	if !w.semaphore.TryAcquire(1) || w.status != poolStarted {
+	if !sem.TryAcquire(1) {
+		return false
+	}
+	if w.status != poolStarted {
+		sem.Release(1)
 		return false
 	}
 
@@ -204,7 +213,7 @@ func (w *Pool) TryEnqueue(job func()) bool {
 		// Run the Function
 		job()
 
-		w.semaphore.Release(1)
+		sem.Release(1)
 	}()
 
 	return true
@@ -212,16 +221,21 @@ func (w *Pool) TryEnqueue(job func()) bool {
 
 // TryEnqueueAndWait will not block if the pool is full, will return true once the job has finished processing or false if the pool is closed or full.
 func (w *Pool) TryEnqueueAndWait(job func()) bool {
+	sem := w.semaphore
 	// Acquire 1 from semaphore ( aka Acquire one worker )
 	// False if semaphore is full or status not started.
-	if !w.semaphore.TryAcquire(1) || w.status != poolStarted {
+	if !sem.TryAcquire(1) {
+		return false
+	}
+	if w.status != poolStarted {
+		sem.Release(1)
 		return false
 	}
 
 	// Run the Function
 	job()
 
-	w.semaphore.Release(1)
+	sem.Release(1)
 
 	return true
 }
